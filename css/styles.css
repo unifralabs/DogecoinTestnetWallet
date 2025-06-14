@@ -1,0 +1,468 @@
+body {
+    font-family: Arial, sans-serif;
+    max-width: 1400px; /* 增加页面整体宽度 */
+    margin: 0 auto; /* 居中显示 */
+    padding: 10px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    font-size: 14px;
+}
+
+.container {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+}
+
+h1 { 
+    text-align: center; 
+    color: #333; 
+    margin-bottom: 15px;
+    font-size: 2em;
+}
+
+.section {
+    margin: 15px 0;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #f9f9f9;
+}
+
+.section h2 {
+    color: #333;
+    border-bottom: 2px solid #4299e1;
+    padding-bottom: 8px;
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 1.3em;
+}
+
+.form-group {
+    margin: 12px 0;
+}
+
+label {
+    display: block;
+    margin-bottom: 4px;
+    font-weight: bold;
+    font-size: 13px;
+}
+
+input, textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
+button {
+    background: #4299e1;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    margin: 3px;
+    display: inline-block;
+    margin-top: 0px; /* 调整按钮位置 */
+    flex-shrink: 0; /* 防止按钮缩小 */
+}
+
+button:hover {
+    background: #3182ce;
+}
+
+.info-display {
+    background: #f0f0f0;
+    padding: 8px;
+    border-radius: 4px;
+    word-break: break-all;
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.balance {
+    font-size: 20px;
+    /* font-weight: bold; */ /* 调整为非粗体，使其更像信息展示而非标题 */
+    color: #38a169;
+    text-align: left; /* 改为左对齐，与其他信息一致 */
+    padding: 8px; /* 调整内边距 */
+    background: #f0f0f0; /* 与其他 info-display 样式统一 */
+    border-radius: 8px;
+    /* border: 2px solid #68d391; */ /* 移除边框，使其更简洁 */
+    word-break: break-all; /* 确保长数字也能换行 */
+}
+
+.alert-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    max-width: 400px;
+    width: auto;
+    pointer-events: none;
+}
+
+.alert {
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    pointer-events: auto;
+    transform: translateX(100%);
+    transition: transform 0.3s ease-in-out;
+    max-width: 350px;
+    word-wrap: break-word;
+}
+
+.alert.show {
+    transform: translateX(0);
+}
+
+.alert-success {
+    background: #d4edda;
+    color: #155724;
+    border-left: 4px solid #28a745;
+}
+
+.alert-error {
+    background: #f8d7da;
+    color: #721c24;
+    border-left: 4px solid #dc3545;
+}
+
+.main-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-top: 15px;
+}
+
+.left-column {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.right-column {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+@media (max-width: 768px) {
+    .main-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+code {
+    background: rgba(0,0,0,0.1);
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-family: monospace;
+}
+
+.block-info {
+    margin-top: 20px;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #f9f9f9;
+}
+
+.block-info h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.2em;
+    color: #333;
+}
+
+.block-info div {
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+
+.block-info-container {
+    margin-top: 20px;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #f9f9f9;
+}
+
+.block-info-container h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.2em;
+    color: #333;
+}
+
+.block-info-container p {
+    margin: 4px 0;
+    font-size: 13px;
+}
+
+select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    margin-bottom: 8px;
+}
+
+.wallet-controls {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 8px;
+}
+
+.wallet-controls button {
+    flex: 1;
+}
+
+.wallet-controls .delete-btn {
+    background: #dc3545;
+    padding: 8px 12px;
+}
+
+.copy-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+    background: #6c757d;
+}
+
+.browser-link {
+    padding: 6px 10px;
+    font-size: 12px;
+    background: #4299e1;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+}
+
+.footer-info {
+    text-align: center;
+    margin-top: 20px;
+    color: #666;
+    font-size: 12px;
+}
+
+.footer-info p {
+    margin: 4px 0;
+}
+
+.footer-info a {
+    color: #4299e1;
+}
+
+.address-container {
+    display: flex; /* 使用 Flexbox 实现同行布局 */
+    align-items: center; /* 垂直居中对齐 */
+    gap: 10px; /* 按钮与地址之间的间距 */
+}
+
+.op-return-options {
+    display: flex;
+    align-items: center;
+    gap: 10px; /* 控制按钮之间的间距 */
+}
+
+.op-return-options input[type="radio"] {
+    margin-right: 5px; /* 调整单选按钮与文本之间的间距 */
+}
+
+.transaction-lists {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.pending-transactions,
+.broadcasted-transactions {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+}
+
+.transaction-list {
+    margin-top: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.transaction-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    background: white;
+}
+
+.transaction-item:last-child {
+    margin-bottom: 0;
+}
+
+.transaction-amount {
+    font-weight: bold;
+    color: #28a745;
+}
+
+.transaction-status {
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 12px;
+    background: #e9ecef;
+}
+
+.status-pending {
+    background: #ffc107;
+    color: #000;
+}
+
+.status-confirmed {
+    background: #28a745;
+    color: #fff;
+}
+
+.no-transactions {
+    text-align: center;
+    color: #6c757d;
+    padding: 20px;
+    font-style: italic;
+}
+
+.transaction-hash {
+    font-family: monospace;
+    font-size: 12px;
+    color: #6c757d;
+    word-break: break-all;
+}
+.transaction-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 12px; /* Smaller font for table content */
+}
+
+.transaction-table th,
+.transaction-table td {
+    border: 1px solid #ddd;
+    padding: 6px; /* Reduced padding */
+    text-align: left;
+    vertical-align: middle;
+}
+
+.transaction-table th {
+    background-color: #e9ecef;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.transaction-table tbody tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+
+.transaction-table a {
+    color: #007bff;
+}
+
+.transaction-time {
+    font-size: 12px;
+    color: #6c757d;
+}
+/* Add this to your css/styles.css */
+.network-status-section {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+}
+
+.network-status-section h2 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #333;
+    font-size: 1.3em;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 5px;
+}
+
+.network-status-section .network-hash-display {
+    background-color: #fff;
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid #eee;
+    font-size: 0.9em;
+    margin-bottom: 10px; /* 与下面的 info-grid 保持间距 */
+}
+.network-status-section .info-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr); /* 改为3列，或者 auto-fit 配合更小的 minmax */
+    gap: 10px;
+}
+
+.network-status-section .info-grid > div {
+    background-color: #fff;
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid #eee;
+    font-size: 0.9em;
+}
+
+.network-status-section .info-grid label {
+    font-weight: bold;
+    color: #555;
+    margin-right: 8px;
+}
+
+.network-status-section .info-grid span {
+    color: #333;
+}
+
+.network-status-section .hash-display {
+    word-break: break-all;
+    font-family: monospace;
+    font-size: 0.95em;
+}
+:root {
+    --spacing-small: 8px;
+    --spacing-medium: 10px;
+}
+
+.balance-container {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-medium);
+}
+
+.balance {
+    padding: var(--spacing-small);
+    /* ... other styles ... */
+}
+.main-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* This creates two equal columns */
+    gap: 20px;
+    margin-top: 15px;
+}
+.fee-input-group {
+    display: flex;
+    align-items: center; /* 垂直居中对齐 */
+}
+
+.fee-input-group input[type="number"] {
+    flex-basis: 120px; /* 给输入框一个基础宽度 */
+    flex-grow: 0; /* 不允许输入框增长 */
+}

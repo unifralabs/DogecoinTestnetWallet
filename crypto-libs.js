@@ -347,4 +347,16 @@
     };
 })();
 
-console.log('Local crypto libraries loaded successfully'); 
+if (!window.initCryptoLibs) {
+    window.initCryptoLibs = async () => {
+        if (typeof CryptoJS === 'undefined') {
+            throw new Error('CryptoJS not loaded');
+        }
+        window.crypto = window.crypto || window.msCrypto;
+        if (!window.crypto) {
+            throw new Error('Web Crypto API not supported');
+        }
+        return true;
+    };
+}
+
