@@ -3,12 +3,12 @@ import { wallet } from './wallet.js';
 function updateWalletUI() {
     if (wallet.address) {
         document.getElementById('address').textContent = wallet.address;
-        document.getElementById('privateKey').textContent = wallet.privateKey;
+        document.getElementById('privateKey').textContent = wallet.wif || '生成或导入钱包以查看';
         document.getElementById('balance').textContent = `${wallet.balance.toFixed(8)} DOGE`;
         document.getElementById('balance').style.color = wallet.balanceAvailable ? '#38a169' : '#666';
     } else {
         document.getElementById('address').textContent = '点击生成钱包';
-        document.getElementById('privateKey').textContent = '点击生成钱包';
+        document.getElementById('privateKey').textContent = '点击生成钱包'; // This will show WIF once available
         document.getElementById('balance').textContent = '点击生成钱包';
         document.getElementById('balance').style.color = '#666';
     }
@@ -22,7 +22,7 @@ function updateCopyButtons() {
     const viewInBrowserBtn = document.getElementById('viewInBrowser');
     
     if (copyAddressBtn) copyAddressBtn.disabled = !wallet.address;
-    if (copyPrivateKeyBtn) copyPrivateKeyBtn.disabled = !wallet.privateKey;
+    if (copyPrivateKeyBtn) copyPrivateKeyBtn.disabled = !wallet.wif; // Disable if no WIF
     if (viewInBrowserBtn) viewInBrowserBtn.disabled = !wallet.address;
 }
 

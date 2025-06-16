@@ -200,11 +200,6 @@ function addEventListeners() {
     if (importWalletBtn) {
         importWalletBtn.addEventListener('click', () => {
             const importResult = importWallet(); 
-            // importWallet 是同步的，但在内部 saveCurrentWallet 是异步的
-            // 为了确保在钱包数据（尤其是新地址）完全保存后刷新，
-            // importWallet 最好能返回一个 Promise，或者我们在这里稍作延迟或依赖其内部的UI更新
-            // 假设 importWallet 内部的 saveCurrentWallet().then(updateWalletUI) 已执行
-            // 并且 wallet 对象已更新
             Promise.resolve(importResult) // importWallet本身不返回promise，这里只是为了链式调用
                 .then(async () => {
                     await Promise.all([refreshBalance(), refreshWalletTransactionHistory(), loadPersistedBroadcastedTransactions()]);
@@ -257,8 +252,8 @@ function addEventListeners() {
     const copyPrivateKeyBtn = document.getElementById('copyPrivateKeyBtn');
     if (copyPrivateKeyBtn) {
         copyPrivateKeyBtn.addEventListener('click', () => {
-            if (wallet.privateKey) {
-                copyToClipboard(wallet.privateKey, '私钥已复制到剪贴板');
+            if (wallet.wif) {
+                copyToClipboard(wallet.wif, '私钥 (WIF) 已复制到剪贴板');
             }
         });
     }

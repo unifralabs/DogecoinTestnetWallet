@@ -5,6 +5,7 @@ import { showAlert, updateWalletUI } from './ui.js';
 let wallet = {
     privateKey: null,
     address: null,
+    wif: null,
     label: '',
     balance: 0,
     balanceAvailable: false
@@ -82,6 +83,7 @@ function generateWallet() {
 
         wallet.privateKey = privateKeyHex;
         wallet.address = address;
+        wallet.wif = wif;
         wallet.label = '新钱包';
         wallet.balance = 0;
         wallet.balanceAvailable = false;
@@ -114,6 +116,11 @@ function loadWallet(address) {
             wallet.address = storedWallet.address;
             wallet.label = storedWallet.label;
             wallet.balance = storedWallet.balance;
+            if (storedWallet.wif) {
+                wallet.wif = storedWallet.wif;
+            } else if (storedWallet.privateKey) { // Fallback for older data
+                wallet.wif = privateKeyToWIF(storedWallet.privateKey);
+            }
             wallet.balanceAvailable = storedWallet.balanceAvailable;
             updateWalletUI();
             console.log('Wallet loaded from IndexedDB:', wallet.address);
@@ -145,6 +152,7 @@ function deleteCurrentWallet() {
 function clearCurrentWallet() {
     wallet.privateKey = null;
     wallet.address = null;
+    wallet.wif = null;
     wallet.label = '';
     wallet.balance = 0;
     wallet.balanceAvailable = false;
@@ -153,7 +161,7 @@ function clearCurrentWallet() {
 
 function importWallet() {
     try {
-        const wifInput = document.getElementById('wifInput').value.trim();
+        const wifInput = document.getElementById('importPrivateKey').value.trim();
         if (!wifInput) {
             showAlert('请输入私钥', 'error');
             return;
@@ -165,6 +173,7 @@ function importWallet() {
 
         wallet.privateKey = privateKeyHex;
         wallet.address = address;
+        wallet.wif = wifInput; // User input is WIF
         wallet.label = '导入钱包';
         wallet.balance = 0;
         wallet.balanceAvailable = false;
