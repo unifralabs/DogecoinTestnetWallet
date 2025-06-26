@@ -22,7 +22,7 @@ function toLittleEndianHex(value, byteLength) {
     return littleEndianHex;
 }
 
-function selectUTXOs(utxos, amountToSendSatoshis, feePerByte = 100) {
+function selectUTXOs(utxos, amountToSendSatoshis, feePerByte = 100, opReturnDataLength = 0) {
     let selectedUtxos = [];
     let currentTotalValue = 0;
     let estimatedFee = 0;
@@ -35,10 +35,13 @@ function selectUTXOs(utxos, amountToSendSatoshis, feePerByte = 100) {
         selectedUtxos.push(utxo);
         currentTotalValue += utxo.value;
 
-        // Estimate fee with current selected inputs and 2 outputs (recipient, change)
+        // Estimate fee with current selected inputs and outputs (recipient, change, optional OP_RETURN)
         // This is iterative and approximate.
-        const numOutputs = 2; // Assume recipient and change for fee estimation
-        estimatedFee = calculateActualEstimatedFee(selectedUtxos.length, numOutputs, feePerByte);
+        let numOutputs = 2; // Base: recipient and change
+        if (opReturnDataLength > 0) {
+            numOutputs += 1; // Add OP_RETURN output
+        }
+        estimatedFee = calculateActualEstimatedFee(selectedUtxos.length, numOutputs, feePerByte, opReturnDataLength);
 
         if (currentTotalValue >= (amountToSendSatoshis + estimatedFee)) {
             return {
@@ -52,11 +55,30 @@ function selectUTXOs(utxos, amountToSendSatoshis, feePerByte = 100) {
     return null;
 }
 
-function createP2PKHScript(address) {
+function createScriptPubKey(address) {
+    console.log('Creating script for address:', address);
     const decoded = bs58.decode(address);
     const hex = decoded.map(b => b.toString(16).padStart(2, '0')).join('');
-    const pubKeyHash = hex.substring(2, 42);
-    return '76a914' + pubKeyHash + '88ac';
+    console.log('Decoded hex:', hex);
+    
+    // Check the version byte to determine address type
+    const versionByte = hex.substring(0, 2);
+    console.log('Version byte:', versionByte);
+    
+    if (versionByte === '6f' || versionByte === '71') {
+        // Dogecoin testnet P2PKH (starts with 'n' or 'm')
+        const pubKeyHash = hex.substring(2, 42);
+        console.log('P2PKH pubKeyHash:', pubKeyHash);
+        return '76a914' + pubKeyHash + '88ac';
+    } else if (versionByte === 'c4') {
+        // Dogecoin testnet P2SH (starts with '2')
+        const scriptHash = hex.substring(2, 42);
+        console.log('P2SH scriptHash:', scriptHash);
+        return 'a914' + scriptHash + '87';
+    } else {
+        console.error('Unsupported address type, version byte:', versionByte);
+        throw new Error('不支持的地址类型');
+    }
 }
 
 function createOpReturnScript(data, format = 'string') {
@@ -113,10 +135,17 @@ function reverseHex(hex) {
     return result;
 }
 
-function calculateActualEstimatedFee(numInputs, numOutputs, feeRatePerByte = 100) { // feeRatePerByte in satoshis
+function calculateActualEstimatedFee(numInputs, numOutputs, feeRatePerByte = 100, opReturnDataLength = 0) { // feeRatePerByte in satoshis
     const baseTxSize = 10; // Approx: version (4) + locktime (4) + input_count (1) + output_count (1)
     const inputSize = numInputs * 148; // Approx: 32(prevTxId) + 4(vout) + 1(scriptLen) + 107(scriptSig) + 4(sequence)
-    const outputSize = numOutputs * 34; // Approx: 8(value) + 1(scriptLen) + 25(scriptPubKey for P2PKH)
+    let outputSize = numOutputs * 34; // Approx: 8(value) + 1(scriptLen) + 25(scriptPubKey for P2PKH)
+    
+    // Add extra size for OP_RETURN output if present
+    if (opReturnDataLength > 0) {
+        // OP_RETURN output: 8(value) + 1(scriptLen) + 2(OP_RETURN + length) + dataLength
+        const opReturnOutputSize = 8 + 1 + 2 + opReturnDataLength;
+        outputSize += opReturnOutputSize - 34; // Replace one standard output size with OP_RETURN size
+    }
     
     const estimatedSize = baseTxSize + inputSize + outputSize;
     return estimatedSize * feeRatePerByte; // Total fee in satoshis
@@ -152,9 +181,20 @@ async function calculateFee() {
             return;
         }
 
-        // For fee calculation, assume 2 outputs (recipient, change)
-        // A more precise calculation would involve selecting UTXOs first.
-        const selectionResult = selectUTXOs(utxos, amountSatoshis, 100); // 100 sat/byte fee rate
+        // Check for OP_RETURN data
+        const opReturnData = document.getElementById('opReturnData') ? document.getElementById('opReturnData').value.trim() : '';
+        let opReturnDataLength = 0;
+        if (opReturnData) {
+            const opReturnFormat = document.getElementById('opReturnFormat') ? document.getElementById('opReturnFormat').value : 'string';
+            if (opReturnFormat === 'hex') {
+                opReturnDataLength = opReturnData.replace(/\s+/g, '').length / 2;
+            } else {
+                opReturnDataLength = new TextEncoder().encode(opReturnData).length;
+            }
+        }
+
+        // For fee calculation, consider all outputs (recipient, change, optional OP_RETURN)
+        const selectionResult = selectUTXOs(utxos, amountSatoshis, 100, opReturnDataLength); // 100 sat/byte fee rate
         if (!selectionResult) {
             showAlert('余额不足以支付该金额，无法估算费用', 'error');
             return;
@@ -168,38 +208,7 @@ async function calculateFee() {
     }
 }
 
-async function previewTransaction() {
-    if (!wallet.address) {
-        showAlert('请先创建或导入钱包', 'error');
-        return;
-    }
 
-    const amount = parseFloat(document.getElementById('amount').value);
-    const recipientAddress = document.getElementById('toAddress').value.trim();
-    const feeText = document.getElementById('estimatedFee').textContent || '0';
-    const fee = parseFloat(feeText.replace(" DOGE", ""));
-
-    if (isNaN(amount) || amount <= 0 || !recipientAddress) {
-        showAlert('请输入金额和接收地址', 'error');
-        return;
-    }
-    if (isNaN(fee) || fee < 0) {
-        showAlert('预估手续费无效', 'error');
-        return;
-    }
-
-    try {
-        updateTransactionPreview({
-            from: wallet.address,
-            to: recipientAddress,
-            amount: amount,
-            fee: fee
-        });
-        showAlert('交易预览已更新', 'success');
-    } catch (error) {
-        showAlert('生成交易预览失败: ' + error.message, 'error');
-    }
-}
 
 const pendingTransactions = []; // Stores { txid, amount, recipient, fee, timestamp }
 const broadcastedTransactions = []; // Stores { txid, amount, recipient, fee, broadcastTime }
@@ -298,7 +307,7 @@ function viewBroadcastedTransactions() { // Made synchronous
     });
 }
 
-async function createActualTransaction(selectedUtxos, recipientAddress, amountToSendSatoshis, changeAddress, privateKeyHex, feeSatoshis) {
+async function createActualTransaction(selectedUtxos, recipientAddress, amountToSendSatoshis, changeAddress, privateKeyHex, feeSatoshis, opReturnData = null, opReturnFormat = 'string') {
     const version = '01000000'; // 4 bytes, little-endian
     const locktime = '00000000'; // 4 bytes, little-endian
     const sequence = 'ffffffff'; // 4 bytes, little-endian
@@ -315,7 +324,7 @@ async function createActualTransaction(selectedUtxos, recipientAddress, amountTo
     }
 
     const inputs = [];
-    const scriptPubKeyForInputs = createP2PKHScript(wallet.address); // Assuming all UTXOs are from current wallet
+    const scriptPubKeyForInputs = createScriptPubKey(wallet.address); // Assuming all UTXOs are from current wallet
 
     selectedUtxos.forEach(utxo => {
         inputs.push({
@@ -329,15 +338,24 @@ async function createActualTransaction(selectedUtxos, recipientAddress, amountTo
     const inputCountHex = inputs.length.toString(16).padStart(2, '0');
 
     const outputs = [];
-    const recipientScriptPubKey = createP2PKHScript(recipientAddress);
+    const recipientScriptPubKey = createScriptPubKey(recipientAddress);
     outputs.push({
         value: BigInt(amountToSendSatoshis),
         scriptPubKey: recipientScriptPubKey
     });
 
+    // Add OP_RETURN output if data is provided
+    if (opReturnData) {
+        const opReturnScript = createOpReturnScript(opReturnData, opReturnFormat);
+        outputs.push({
+            value: BigInt(0), // OP_RETURN outputs have zero value
+            scriptPubKey: opReturnScript
+        });
+    }
+
     const DUST_THRESHOLD_SATOSHIS = 1000000; // 0.01 DOGE, adjust as needed
     if (changeAmountSatoshis >= DUST_THRESHOLD_SATOSHIS) {
-        const changeScriptPubKey = createP2PKHScript(changeAddress);
+        const changeScriptPubKey = createScriptPubKey(changeAddress);
         outputs.push({
             value: BigInt(changeAmountSatoshis),
             scriptPubKey: changeScriptPubKey
@@ -418,6 +436,7 @@ async function sendTransaction() {
 
     const amount = parseFloat(document.getElementById('amount').value);
     const recipientAddress = document.getElementById('toAddress').value.trim();
+    const userFee = parseFloat(document.getElementById('fee').value) || 0; // 获取用户输入的手续费
 
     if (isNaN(amount) || amount <= 0 || !recipientAddress) {
         showAlert('请输入金额和接收地址', 'error');
@@ -432,15 +451,63 @@ async function sendTransaction() {
             return;
         }
 
-        const feePerByte = 100; // satoshis per byte
-        let selectionResult = selectUTXOs(utxos, amountSatoshis, feePerByte);
-
-        if (!selectionResult) {
-            showAlert('余额不足以支付金额和预估手续费', 'error');
-            return;
+        // Get OP_RETURN data if provided
+        const opReturnData = document.getElementById('opReturnData') ? document.getElementById('opReturnData').value.trim() : '';
+        const opReturnFormat = document.getElementById('opReturnFormat') ? document.getElementById('opReturnFormat').value : 'string';
+        let opReturnDataLength = 0;
+        if (opReturnData) {
+            if (opReturnFormat === 'hex') {
+                opReturnDataLength = opReturnData.replace(/\s+/g, '').length / 2;
+            } else {
+                opReturnDataLength = new TextEncoder().encode(opReturnData).length;
+            }
+            
+            // Validate OP_RETURN data size (max 80 bytes for standard relay)
+            if (opReturnDataLength > 80) {
+                showAlert('OP_RETURN 数据长度不能超过 80 字节', 'error');
+                return;
+            }
         }
-        
-        let { selectedUtxos: actualSelectedUtxos, totalInputAmount, estimatedFee: actualFeeSatoshis } = selectionResult;
+
+        let actualFeeSatoshis;
+        let actualSelectedUtxos;
+        let totalInputAmount;
+
+        if (userFee > 0) {
+            // 用户输入了非零手续费，使用用户指定的手续费
+            actualFeeSatoshis = Math.round(userFee * 1e8);
+            
+            // 使用用户指定的手续费选择UTXO
+            const feePerByte = 100; // 这里只是用于UTXO选择的估算
+            let selectionResult = selectUTXOs(utxos, amountSatoshis, feePerByte, opReturnDataLength);
+            
+            if (!selectionResult) {
+                showAlert('余额不足以支付金额和预估手续费', 'error');
+                return;
+            }
+            
+            actualSelectedUtxos = selectionResult.selectedUtxos;
+            totalInputAmount = selectionResult.totalInputAmount;
+            
+            // 检查用户指定的手续费是否足够
+            if (totalInputAmount < amountSatoshis + actualFeeSatoshis) {
+                showAlert('余额不足以支付指定的金额和手续费', 'error');
+                return;
+            }
+        } else {
+            // 用户输入的手续费为0，使用自动计算的手续费
+            const feePerByte = 100; // satoshis per byte
+            let selectionResult = selectUTXOs(utxos, amountSatoshis, feePerByte, opReturnDataLength);
+
+            if (!selectionResult) {
+                showAlert('余额不足以支付金额和预估手续费', 'error');
+                return;
+            }
+            
+            actualSelectedUtxos = selectionResult.selectedUtxos;
+            totalInputAmount = selectionResult.totalInputAmount;
+            actualFeeSatoshis = selectionResult.estimatedFee;
+        }
 
         let changeAmountSatoshis = totalInputAmount - amountSatoshis - actualFeeSatoshis;
         
@@ -461,28 +528,42 @@ async function sendTransaction() {
             amountSatoshis,
             wallet.address,
             wallet.privateKey,
-            actualFeeSatoshis
+            actualFeeSatoshis,
+            opReturnData || null,
+            opReturnFormat
         );
 
         const txHashBytes = sha256Double(CryptoJS.enc.Hex.parse(rawTxHex));
         const localTxid = reverseHex(txHashBytes.toString(CryptoJS.enc.Hex));
 
-        addPendingTransaction({ txid: localTxid, amount: amount, recipient: recipientAddress, fee: actualFeeSatoshis / 1e8 });
+        addPendingTransaction({ 
+            txid: localTxid, 
+            amount: amount, 
+            recipient: recipientAddress, 
+            fee: actualFeeSatoshis / 1e8,
+            opReturnData: opReturnData || null
+        });
 
         const broadcastedTxid = await broadcastTransaction(rawTxHex);
         // Use broadcastedTxid as the canonical one
-        await addBroadcastedTransaction({ txid: broadcastedTxid, amount: amount, recipient: recipientAddress, fee: actualFeeSatoshis / 1e8 }, wallet.address);
+        await addBroadcastedTransaction({ 
+            txid: broadcastedTxid, 
+            amount: amount, 
+            recipient: recipientAddress, 
+            fee: actualFeeSatoshis / 1e8,
+            opReturnData: opReturnData || null
+        }, wallet.address);
 
-        showAlert('交易发送成功，TXID: ' + broadcastedTxid, 'success');
+        let successMessage = '交易发送成功，TXID: ' + broadcastedTxid;
+        if (opReturnData) {
+            successMessage += '，包含 OP_RETURN 数据: ' + opReturnData.substring(0, 20) + (opReturnData.length > 20 ? '...' : '');
+        }
+        showAlert(successMessage, 'success');
         refreshBalanceAndUpdateUI(); // Refresh balance after sending
     } catch (error) {
         console.error("交易发送失败详情:", error);
         showAlert('交易发送失败: ' + error.message, 'error');
     }
-}
-
-function sendOpReturnOnly() {
-    showAlert('OP_RETURN 交易功能尚未实现', 'info');
 }
 
 function openInBrowser() {
@@ -494,12 +575,7 @@ function openInBrowser() {
     }
 }
 
-function updateTransactionPreview(previewData) {
-    document.getElementById('previewTo').textContent = previewData.to || '-';
-    document.getElementById('previewAmount').textContent = previewData.amount.toFixed(8) + " DOGE";
-    document.getElementById('previewFee').textContent = previewData.fee.toFixed(8) + " DOGE";
-    document.getElementById('previewTotal').textContent = (previewData.amount + previewData.fee).toFixed(8) + " DOGE";
-}
+
 
 
 
@@ -656,13 +732,11 @@ async function checkPendingTransactionsStatus() {
 }
 export {
     selectUTXOs,
-    createP2PKHScript,
+    createScriptPubKey,
     createOpReturnScript,
     serializeTransaction,
     calculateFee,
-    previewTransaction,
     sendTransaction,
-    sendOpReturnOnly,
     openInBrowser,
     testConnection,
     viewPendingTransactions,

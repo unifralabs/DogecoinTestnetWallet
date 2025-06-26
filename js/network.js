@@ -10,9 +10,9 @@ function getElectrsUrl() {
 }
 
 function getCorsProxyUrl(url) {
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        return `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-    }
+    // if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    //     return `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    // }
     return url;
 }
 

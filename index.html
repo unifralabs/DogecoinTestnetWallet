@@ -183,21 +183,23 @@
                         <div class="op-return-format">
                             <div class="op-return-options">
                                 <label>
-                                    <input type="radio" name="op-return-type" value="string"> 字符串
+                                    <input type="radio" name="opReturnFormat" id="opReturnFormatString" value="string" checked> 字符串
                                 </label>
                                 <label>
-                                    <input type="radio" name="op-return-type" value="hex"> 十六进制
+                                    <input type="radio" name="opReturnFormat" id="opReturnFormatHex" value="hex"> 十六进制
                                 </label>
                             </div>
+                            <select id="opReturnFormat" style="display: none;">
+                                <option value="string">字符串</option>
+                                <option value="hex">十六进制</option>
+                            </select>
                         </div>
                         <textarea id="opReturnData" rows="3"
-                            placeholder="输入十六进制数据\n例如: 48656c6c6f20446f6765636f696e21\n(对应 " Hello
-                            Dogecoin!")\n最大80字节"></textarea>
+                            placeholder="输入数据内容&#10;字符串模式: Hello Dogecoin!&#10;十六进制模式: 48656c6c6f20446f6765636f696e21&#10;最大80字节"></textarea>
                         <small id="opReturnHelp">OP_RETURN允许在交易中包含任意数据，永久记录在区块链上</small>
                     </div>
                     <div style="display: flex; gap: 5px; margin-bottom: 8px;">
-                        <button id="previewTransactionBtn" style="flex: 1; background: #6c757d;">预览交易</button>
-                        <button id="sendTransactionBtn" style="flex: 1;">发送普通交易</button>
+                        <button id="sendTransactionBtn" style="flex: 1;">发送交易</button>
                     </div>
                 </div>
                 <!-- Transaction History moved here, under Send Transaction -->

@@ -2,7 +2,7 @@ import { initializeCrypto } from './crypto-utils.js';
 import { wallet, generateWallet, loadWallet, deleteCurrentWallet, importWallet } from './wallet.js';
 import { fetchBalance, useElectrs, useElectrsProxy } from './network.js';
 import { showAlert, updateWalletUI, copyToClipboard } from './ui.js';
-import { testConnection, calculateFee, previewTransaction, sendTransaction, sendOpReturnOnly, openInBrowser, viewPendingTransactions, viewBroadcastedTransactions, refreshWalletTransactionHistory, loadPersistedBroadcastedTransactions, checkPendingTransactionsStatus } from './transaction.js';
+import { testConnection, calculateFee, sendTransaction, openInBrowser, viewPendingTransactions, viewBroadcastedTransactions, refreshWalletTransactionHistory, loadPersistedBroadcastedTransactions, checkPendingTransactionsStatus } from './transaction.js';
 import { updateWalletList } from './storage.js';
 
 let autoRefreshInterval = null;
@@ -86,9 +86,9 @@ function restoreWallet() {
                 checkPendingTransactionsStatus(); // Also check status after loading wallet
             })
             .catch(error => {
-            console.error("恢复钱包时加载或刷新历史失败:", error);
-            Promise.all([refreshBalance(), loadPersistedBroadcastedTransactions(), refreshWalletTransactionHistory()]);
-        });
+                console.error("恢复钱包时加载或刷新历史失败:", error);
+                Promise.all([refreshBalance(), loadPersistedBroadcastedTransactions(), refreshWalletTransactionHistory()]);
+            });
     } else {
         updateWalletUI();
         // Ensure lists are cleared if no wallet
@@ -105,7 +105,7 @@ function startAutoRefresh() {
     if (autoRefreshInterval) {
         clearInterval(autoRefreshInterval);
     }
-    
+
     autoRefreshInterval = setInterval(async () => {
         if (wallet.address) {
             try {
@@ -118,7 +118,7 @@ function startAutoRefresh() {
             }
         }
     }, AUTO_REFRESH_INTERVAL);
-    
+
     console.log('Auto refresh started (every 30 seconds)');
     updateAutoRefreshStatus();
 }
@@ -152,7 +152,7 @@ function updateBlockInfoStatus() {
 
 function addEventListeners() {
     console.log('Setting up event listeners...');
-    
+
     const generateWalletBtn = document.getElementById('generateWalletBtn');
     if (generateWalletBtn) {
         console.log('Found generate wallet button, adding click listener');
@@ -169,7 +169,7 @@ function addEventListeners() {
     } else {
         console.error('Generate wallet button not found');
     }
-    
+
     const walletSelect = document.getElementById('walletSelect');
     if (walletSelect) {
         console.log('Found wallet select, adding change listener');
@@ -183,9 +183,9 @@ function addEventListeners() {
                         checkPendingTransactionsStatus();
                     })
                     .catch(error => {
-                    console.error("选择钱包时加载或刷新历史失败:", error);
-                    Promise.all([refreshBalance(), loadPersistedBroadcastedTransactions(), refreshWalletTransactionHistory()]);
-                });
+                        console.error("选择钱包时加载或刷新历史失败:", error);
+                        Promise.all([refreshBalance(), loadPersistedBroadcastedTransactions(), refreshWalletTransactionHistory()]);
+                    });
             } else {
                 clearCurrentWallet();
                 updateWalletUI();
@@ -199,16 +199,16 @@ function addEventListeners() {
     const importWalletBtn = document.getElementById('importWalletBtn');
     if (importWalletBtn) {
         importWalletBtn.addEventListener('click', () => {
-            const importResult = importWallet(); 
+            const importResult = importWallet();
             Promise.resolve(importResult) // importWallet本身不返回promise，这里只是为了链式调用
                 .then(async () => {
                     await Promise.all([refreshBalance(), refreshWalletTransactionHistory(), loadPersistedBroadcastedTransactions()]);
                     checkPendingTransactionsStatus();
                 })
                 .catch(error => {
-                console.error("导入钱包或刷新历史时出错:", error);
-                if(wallet.address) refreshWalletTransactionHistory();
-            });
+                    console.error("导入钱包或刷新历史时出错:", error);
+                    if (wallet.address) refreshWalletTransactionHistory();
+                });
         });
     }
     const deleteWalletBtn = document.getElementById('deleteWalletBtn');
@@ -226,9 +226,7 @@ function addEventListeners() {
     document.getElementById('testConnectionBtn')?.addEventListener('click', () => testConnection());
     const transactionButtons = {
         calculateFeeBtn: calculateFee,
-        previewTransactionBtn: previewTransaction,
         sendTransactionBtn: sendTransaction,
-        sendOpReturnOnlyBtn: sendOpReturnOnly,
         viewInBrowser: (e) => {
             e.preventDefault();
             openInBrowser();
@@ -257,6 +255,36 @@ function addEventListeners() {
             }
         });
     }
+
+    // Add OP_RETURN format selection event listeners
+    const opReturnFormatRadios = document.querySelectorAll('input[name="opReturnFormat"]');
+    const opReturnSelect = document.getElementById('opReturnFormat');
+    const opReturnData = document.getElementById('opReturnData');
+
+    opReturnFormatRadios.forEach(radio => {
+        radio.addEventListener('change', () => {
+            if (opReturnSelect) {
+                opReturnSelect.value = radio.value;
+            }
+            updateOpReturnPlaceholder();
+        });
+    });
+
+    // Function to update OP_RETURN placeholder text
+    function updateOpReturnPlaceholder() {
+        if (opReturnData) {
+            const selectedFormat = document.querySelector('input[name="opReturnFormat"]:checked')?.value || 'string';
+            if (selectedFormat === 'hex') {
+                opReturnData.placeholder = '输入十六进制数据\n例如: 48656c6c6f20446f6765636f696e21\n(对应 "Hello Dogecoin!")\n最大80字节';
+            } else {
+                opReturnData.placeholder = '输入字符串数据\n例如: Hello Dogecoin!\n最大80字节';
+            }
+        }
+    }
+
+    // Initialize placeholder
+    updateOpReturnPlaceholder();
+
     refreshTransactionLists();
 }
 
