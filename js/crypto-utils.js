@@ -42,6 +42,7 @@ function getPublicKey(privateKeyHex) {
     const keyPair = secp256k1.keyFromPrivate(privateKeyHex, 'hex');
     return keyPair.getPublic('hex');
 }
+}
 
 export {
     DOGECOIN_TESTNET,
