@@ -52,5 +52,5 @@ export {
     ripemd160,
     hash160,
     generatePrivateKey,
-    getPublicKey
+    getPublickey
 };
