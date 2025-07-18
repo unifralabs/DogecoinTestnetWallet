@@ -586,9 +586,6 @@ function testConnection() {
 async function fetchTransactionHistory(address) {
     if (!address) return [];
     try {
-        // This needs access to getElectrsUrl() and potentially getCorsProxyUrl() from network.js
-        // For simplicity, assuming direct access or these are made available globally/imported.
-        // This is a simplified URL construction.
         const electrsBase = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.useElectrsProxy ? '/electrs' : 'https://doge-electrs-testnet-demo.qed.me';
         const apiUrl = `${electrsBase}/address/${address}/txs`;
         

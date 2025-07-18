@@ -9,13 +9,6 @@ function getElectrsUrl() {
     }
 }
 
-function getCorsProxyUrl(url) {
-    // if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    //     return `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-    // }
-    return url;
-}
-
 async function fetchBalance(address) {
     try {
         const baseUrl = getElectrsUrl();
@@ -32,8 +25,7 @@ async function fetchBalance(address) {
             }
         } else {
             const apiUrl = `${baseUrl}/address/${address}`;
-            const finalUrl = getCorsProxyUrl(apiUrl);
-            response = await fetch(finalUrl);
+            response = await fetch(apiUrl);
             if (response.ok) {
                 data = await response.json();
                 return {
@@ -52,9 +44,8 @@ async function getUTXOs(address) {
     try {
         const baseUrl = getElectrsUrl();
         const apiUrl = `${baseUrl}/address/${address}/utxo`;
-        const finalUrl = getCorsProxyUrl(apiUrl);
         
-        const response = await fetch(finalUrl);
+        const response = await fetch(apiUrl);
         if (response.ok) {
             const utxos = await response.json();
             return utxos.filter(utxo => {
@@ -96,11 +87,9 @@ async function fetchMempoolTransactions(address) {
     try {
         const baseUrl = getElectrsUrl();
         const apiUrl = `${baseUrl}/address/${address}/txs/mempool`;
-        // Mempool data might not always need CORS proxy if server is well-configured,
-        // but using getCorsProxyUrl provides consistency.
-        const finalUrl = getCorsProxyUrl(apiUrl);
+        // Mempool data might not always need CORS proxy if server is well-configured.
 
-        const response = await fetch(finalUrl);
+        const response = await fetch(apiUrl);
         if (response.ok) {
             return await response.json(); // Returns an array of transaction objects
         }
@@ -114,11 +103,10 @@ async function fetchMempoolTransactions(address) {
 
 export {
     getElectrsUrl,
-    getCorsProxyUrl,
     fetchBalance,
     getUTXOs,
     broadcastTransaction,
-    fetchMempoolTransactions, // Export the new function
+    fetchMempoolTransactions,
     useElectrs,
     useElectrsProxy
 };
