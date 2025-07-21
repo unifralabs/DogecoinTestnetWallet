@@ -22,13 +22,13 @@ async function initializeApp() {
 
         console.log('Verifying dependencies...');
         if (!window.CryptoJS) {
-            throw new Error('CryptoJS 未能正确加载');
+            throw new Error('CryptoJS failed to load properly');
         }
         if (!window.bs58) {
-            throw new Error('Base58 库未能正确加载');
+            throw new Error('Base58 library failed to load properly');
         }
         if (!window.elliptic) {
-            throw new Error('椭圆曲线加密库未能正确加载');
+            throw new Error('Elliptic curve encryption library failed to load properly');
         }
 
         console.log('Dependencies verified, initializing crypto...');
@@ -44,36 +44,36 @@ async function initializeApp() {
             checkPendingTransactionsStatus(); // Initial check after loading persisted transactions
             updateWalletList();
         } else {
-            throw new Error('加密模块初始化失败');
+            throw new Error('Crypto module initialization failed');
         }
     } catch (error) {
         console.error('Failed to initialize app:', error);
-        showAlert('应用初始化失败: ' + error.message, 'error');
+        showAlert('Application initialization failed: ' + error.message, 'error');
         throw error;
     }
 }
 
 async function refreshBalance() {
     if (wallet.address) {
-        showAlert('正在刷新余额...', 'info');
+        showAlert('Refreshing balance...', 'info');
         try {
             const result = await fetchBalance(wallet.address);
             wallet.balance = result.balance / 100000000;
             wallet.balanceAvailable = true;
             updateWalletUI();
-            showAlert('余额已更新', 'success');
+            showAlert('Balance updated', 'success');
         } catch (error) {
-            console.error('手动刷新余额失败:', error);
-            wallet.balanceAvailable = false; // 表示余额可能已过时
-            updateWalletUI(); // 即使出错也更新UI以反映不可用状态
-            showAlert('刷新余额失败: ' + error.message, 'error');
+            console.error('Manual balance refresh failed:', error);
+            wallet.balanceAvailable = false; // Indicates balance may be outdated
+            updateWalletUI(); // Update UI even on error to reflect unavailable state
+            showAlert('Balance refresh failed: ' + error.message, 'error');
         }
     } else {
-        // 如果没有活动钱包，可以清除余额显示或提示选择钱包
+        // If no active wallet, clear balance display or prompt to select wallet
         wallet.balance = 0;
         wallet.balanceAvailable = false;
         updateWalletUI();
-        // showAlert('请先选择或生成钱包', 'info'); // 可选提示
+        // showAlert('Please select or generate a wallet first', 'info'); // Optional prompt
     }
 }
 
@@ -86,7 +86,7 @@ function restoreWallet() {
                 checkPendingTransactionsStatus(); // Also check status after loading wallet
             })
             .catch(error => {
-                console.error("恢复钱包时加载或刷新历史失败:", error);
+                console.error("Failed to load or refresh history when restoring wallet:", error);
                 Promise.all([refreshBalance(), loadPersistedBroadcastedTransactions(), refreshWalletTransactionHistory()]);
             });
     } else {
@@ -128,10 +128,10 @@ function updateAutoRefreshStatus() {
     const statusElement = document.getElementById('autoRefreshStatus');
     if (statusElement) {
         if (autoRefreshInterval) {
-            statusElement.textContent = '🔄 自动刷新: 30秒';
+            statusElement.textContent = '🔄 Auto refresh: 30s';
             statusElement.style.color = '#28a745';
         } else {
-            statusElement.textContent = '⏸️ 自动刷新: 已停止';
+            statusElement.textContent = '⏸️ Auto refresh: Stopped';
             statusElement.style.color = '#666';
         }
     }
@@ -141,10 +141,10 @@ function updateBlockInfoStatus() {
     const statusElement = document.getElementById('blockInfoStatus');
     if (statusElement) {
         if (blockInfoInterval) {
-            statusElement.textContent = '🔄 自动刷新: 1秒';
+            statusElement.textContent = '🔄 Auto refresh: 1s';
             statusElement.style.color = '#28a745';
         } else {
-            statusElement.textContent = '⏸️ 自动刷新: 已停止';
+            statusElement.textContent = '⏸️ Auto refresh: Stopped';
             statusElement.style.color = '#666';
         }
     }
@@ -159,7 +159,7 @@ function addEventListeners() {
         generateWalletBtn.addEventListener('click', () => {
             console.log('Generate wallet button clicked');
             generateWallet();
-            // 生成钱包后，地址已在wallet对象中，可以立即刷新余额和历史
+            // After generating wallet, address is in wallet object, can immediately refresh balance and history
             Promise.all([
                 refreshBalance(),
                 loadPersistedBroadcastedTransactions(), // Clear/load for new wallet
@@ -183,7 +183,7 @@ function addEventListeners() {
                         checkPendingTransactionsStatus();
                     })
                     .catch(error => {
-                        console.error("选择钱包时加载或刷新历史失败:", error);
+                        console.error("Failed to load or refresh history when selecting wallet:", error);
                         Promise.all([refreshBalance(), loadPersistedBroadcastedTransactions(), refreshWalletTransactionHistory()]);
                     });
             } else {
@@ -200,13 +200,13 @@ function addEventListeners() {
     if (importWalletBtn) {
         importWalletBtn.addEventListener('click', () => {
             const importResult = importWallet();
-            Promise.resolve(importResult) // importWallet本身不返回promise，这里只是为了链式调用
+            Promise.resolve(importResult) // importWallet itself doesn't return promise, this is just for chaining
                 .then(async () => {
                     await Promise.all([refreshBalance(), refreshWalletTransactionHistory(), loadPersistedBroadcastedTransactions()]);
                     checkPendingTransactionsStatus();
                 })
                 .catch(error => {
-                    console.error("导入钱包或刷新历史时出错:", error);
+                    console.error("Error importing wallet or refreshing history:", error);
                     if (wallet.address) refreshWalletTransactionHistory();
                 });
         });
@@ -219,7 +219,7 @@ function addEventListeners() {
                     // After deleting, wallet.address will be null, so refreshBalance and others will show empty state.
                     await Promise.all([refreshBalance(), refreshWalletTransactionHistory(), loadPersistedBroadcastedTransactions()]);
                 })
-                .catch(error => console.error("删除钱包或刷新历史失败:", error));
+                .catch(error => console.error("Failed to delete wallet or refresh history:", error));
         });
     }
     document.getElementById('refreshBalanceBtn')?.addEventListener('click', () => refreshBalance());
@@ -243,7 +243,7 @@ function addEventListeners() {
     if (copyAddressBtn) {
         copyAddressBtn.addEventListener('click', () => {
             if (wallet.address) {
-                copyToClipboard(wallet.address, '地址已复制到剪贴板');
+                copyToClipboard(wallet.address, 'Address copied to clipboard');
             }
         });
     }
@@ -251,7 +251,7 @@ function addEventListeners() {
     if (copyPrivateKeyBtn) {
         copyPrivateKeyBtn.addEventListener('click', () => {
             if (wallet.wif) {
-                copyToClipboard(wallet.wif, '私钥 (WIF) 已复制到剪贴板');
+                copyToClipboard(wallet.wif, 'Private key (WIF) copied to clipboard');
             }
         });
     }
@@ -275,9 +275,9 @@ function addEventListeners() {
         if (opReturnData) {
             const selectedFormat = document.querySelector('input[name="opReturnFormat"]:checked')?.value || 'string';
             if (selectedFormat === 'hex') {
-                opReturnData.placeholder = '输入十六进制数据\n例如: 48656c6c6f20446f6765636f696e21\n(对应 "Hello Dogecoin!")\n最大80字节';
+                opReturnData.placeholder = 'Enter hexadecimal data\nExample: 48656c6c6f20446f6765636f696e21\n(corresponds to "Hello Dogecoin!")\nMaximum 80 bytes';
             } else {
-                opReturnData.placeholder = '输入字符串数据\n例如: Hello Dogecoin!\n最大80字节';
+                opReturnData.placeholder = 'Enter string data\nExample: Hello Dogecoin!\nMaximum 80 bytes';
             }
         }
     }
@@ -303,7 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM Content Loaded, initializing app...');
     initializeApp().catch(error => {
         console.error('App initialization error:', error);
-        showAlert('应用初始化失败，请刷新页面重试', 'error');
+        showAlert('Application initialization failed, please refresh page and try again', 'error');
     });
 });
 initializeApp();

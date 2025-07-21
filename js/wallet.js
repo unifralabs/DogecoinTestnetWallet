@@ -84,7 +84,7 @@ function generateWallet() {
         wallet.privateKey = privateKeyHex;
         wallet.address = address;
         wallet.wif = wif;
-        wallet.label = '新钱包';
+        wallet.label = 'New Wallet';
         wallet.balance = 0;
         wallet.balanceAvailable = false;
 
@@ -92,9 +92,9 @@ function generateWallet() {
         updateWalletUI();
         updateWalletList(address);
         
-        showAlert('新钱包已生成', 'success');
+        showAlert('New wallet generated', 'success');
     } catch (error) {
-        showAlert(`生成钱包失败: ${error.message}`, 'error');
+        showAlert(`Wallet generation failed: ${error.message}`, 'error');
     }
 }
 
@@ -126,11 +126,11 @@ function loadWallet(address) {
             console.log('Wallet loaded from IndexedDB:', wallet.address);
         } else {
             console.error('Wallet not found in IndexedDB:', address);
-            showAlert('钱包未找到', 'error');
+            showAlert('Wallet not found', 'error');
         }
     }).catch(error => {
         console.error('Failed to load wallet:', error);
-        showAlert('加载钱包失败', 'error');
+        showAlert('Failed to load wallet', 'error');
     });
 }
 
@@ -141,10 +141,10 @@ function deleteCurrentWallet() {
             clearCurrentWallet();
             updateWalletUI();
             updateWalletList();
-            showAlert('钱包已删除', 'success');
+            showAlert('Wallet deleted', 'success');
         }).catch(error => {
             console.error('Failed to delete wallet:', error);
-            showAlert('删除钱包失败: ' + error.message, 'error');
+            showAlert('Failed to delete wallet: ' + error.message, 'error');
         });
     }
 }
@@ -163,7 +163,7 @@ function importWallet() {
     try {
         const wifInput = document.getElementById('importPrivateKey').value.trim();
         if (!wifInput) {
-            showAlert('请输入私钥', 'error');
+            showAlert('Please enter private key', 'error');
             return;
         }
 
@@ -174,15 +174,15 @@ function importWallet() {
         wallet.privateKey = privateKeyHex;
         wallet.address = address;
         wallet.wif = wifInput; // User input is WIF
-        wallet.label = '导入钱包';
+        wallet.label = 'Imported Wallet';
         wallet.balance = 0;
         wallet.balanceAvailable = false;
 
         saveCurrentWallet();
         updateWalletUI();
-        showAlert('钱包已导入', 'success');
+        showAlert('Wallet imported', 'success');
     } catch (error) {
-        showAlert(`导入钱包失败: ${error.message}`, 'error');
+        showAlert(`Wallet import failed: ${error.message}`, 'error');
     }
 }
 

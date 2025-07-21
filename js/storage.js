@@ -116,13 +116,13 @@ function updateWalletList(addressToSelect) {
         select.innerHTML = '';
         const defaultOption = document.createElement('option');
         defaultOption.value = '';
-        defaultOption.textContent = '选择钱包';
+        defaultOption.textContent = 'Select Wallet';
         select.appendChild(defaultOption);
 
         wallets.forEach(wallet => {
             const option = document.createElement('option');
             option.value = wallet.address;
-            option.textContent = `${wallet.label || '未命名钱包'} (${wallet.address})`;
+            option.textContent = `${wallet.label || 'Unnamed Wallet'} (${wallet.address})`;
             select.appendChild(option);
 
             if (wallet.address === currentValue) {
@@ -145,7 +145,7 @@ async function saveBroadcastedTxToDB(txDetails, currentAddress) {
         // Add a default status if not present, and ensure the address from the current wallet context is used.
             const txToSave = {
                 ...txDetails,
-                address: currentAddress, // 使用传入的地址
+                address: currentAddress, // Use passed address
             status: txDetails.status || 'pending' 
         };
         if (!txToSave.address) {
@@ -170,7 +170,7 @@ async function getBroadcastedTxsFromDB(address) {
 
         request.onsuccess = (event) => {
             const walletTxs = event.target.result;
-            resolve(walletTxs.sort((a, b) => b.broadcastTime - a.broadcastTime)); // 按时间排序
+            resolve(walletTxs.sort((a, b) => b.broadcastTime - a.broadcastTime)); // Sort by time
         };
         request.onerror = (event) => reject(event.target.error);
     });

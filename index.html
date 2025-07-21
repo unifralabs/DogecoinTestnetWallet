@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
@@ -56,67 +56,67 @@
             <!-- Left Column: Wallet Info and Transaction History -->
             <div class="left-column">
                 <div class="section">
-                    <h2>钱包信息</h2>
+                    <h2>Wallet Information</h2>
                     <div class="form-group">
-                        <label>网络:</label>
+                        <label>Network:</label>
                         <div class="info-display">Dogecoin Testnet</div>
                     </div>
                     <div class="form-group">
                         <select id="walletSelect" onchange="">
-                            <option value="">选择或创建钱包</option> <!-- Changed placeholder text slightly -->
+                            <option value="">Select or Create Wallet</option>
                         </select>
                         <div class="wallet-controls">
-                            <button id="generateWalletBtn">生成新钱包</button>
+                            <button id="generateWalletBtn">Generate New Wallet</button>
                             <button id="newWalletBtn" style="display: none;">Test newWallet</button>
-                            <button id="importWalletBtn">导入钱包</button>
-                            <button id="deleteWalletBtn" class="delete-btn">删除</button>
+                            <button id="importWalletBtn">Import Wallet</button>
+                            <button id="deleteWalletBtn" class="delete-btn">Delete</button>
                         </div>
                         <div class="form-group">
-                            <input type="text" id="importPrivateKey" placeholder="输入私钥 (WIF格式) 然后点击导入钱包">
+                            <input type="text" id="importPrivateKey" placeholder="Enter private key (WIF format) then click Import Wallet">
                         </div>
                     </div>
                     <div class="form-group" style="display: none;">
-                        <label>查询方式:</label>
+                        <label>Query Method:</label>
                         <div>
                             <label class="inline-label">
                                 <input type="radio" name="queryMethod" value="electrs" checked
                                     onchange="switchQueryMethod()"> Electrs API
                             </label>
                             <label class="inline-label">
-                                <input type="radio" name="queryMethod" value="rpc" onchange="switchQueryMethod()"> 本地RPC
+                                <input type="radio" name="queryMethod" value="rpc" onchange="switchQueryMethod()"> Local RPC
                             </label>
                         </div>
                         <div id="electrsOptions">
                             <label class="inline-label">
-                                <input type="checkbox" id="useProxy" onchange="toggleElectrsProxy()"> 使用代理
+                                <input type="checkbox" id="useProxy" onchange="toggleElectrsProxy()"> Use Proxy
                             </label>
-                            <span class="help-text">(本地环境使用CORS代理)</span>
+                            <span class="help-text">(Local environment uses CORS proxy)</span>
                         </div>
                         <div class="flex-container">
-                            <div class="info-display" id="rpcStatus">正在检测连接...</div>
-                            <button id="testConnectionBtn" class="copy-btn">测试</button>
+                            <div class="info-display" id="rpcStatus">Detecting connection...</div>
+                            <button id="testConnectionBtn" class="copy-btn">Test</button>
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>地址:</label>
+                        <label>Address:</label>
                         <div class="address-container">
-                            <span class="address" id="address">点击生成钱包获取地址</span>
-                            <button id="copyAddressBtn" class="copy-btn" disabled>复制</button>
-                            <button id="viewInBrowser" class="browser-link" disabled>在浏览器中查看</button>
+                            <span class="address" id="address">Click Generate Wallet to get address</span>
+                            <button id="copyAddressBtn" class="copy-btn" disabled>Copy</button>
+                            <button id="viewInBrowser" class="browser-link" disabled>View in Browser</button>
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>私钥 (WIF):</label>
+                        <label>Private Key (WIF):</label>
                         <div class="address-container">
-                            <div class="address" id="privateKey">点击生成钱包获取私钥</div>
-                            <button id="copyPrivateKeyBtn" class="copy-btn" disabled>复制</button>
+                            <div class="address" id="privateKey">Click Generate Wallet to get private key</div>
+                            <button id="copyPrivateKeyBtn" class="copy-btn" disabled>Copy</button>
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>余额:</label>
+                        <label>Balance:</label>
                         <div class="balance-container">
                             <div class="balance" id="balance">0.00000000 DOGE</div>
-                            <button id="refreshBalanceBtn" class="copy-btn">刷新余额</button>
+                            <button id="refreshBalanceBtn" class="copy-btn">Refresh Balance</button>
                             <div class="auto-refresh-status">
                                 <!-- Auto refresh status will be populated by JS -->
                             </div>
@@ -124,27 +124,27 @@
                     </div>
                     <div class="form-group">
                         <div class="faucet-info">
-                            <strong>测试币水龙头:</strong>
-                            <a href="https://faucet.doge.toys/" target="_blank" class="faucet-link">🚰 获取免费测试币</a>
+                            <strong>Testnet Faucet:</strong>
+                            <a href="https://faucet.doge.toys/" target="_blank" class="faucet-link">🚰 Get Free Test Coins</a>
                         </div>
                     </div>
                 </div>
                 <!-- Network Status will now be here, under Wallet Info -->
                 <div class="section">
                     <div class="section network-status-section">
-                        <h2>网络状态</h2>
+                        <h2>Network Status</h2>
                         <div class="network-hash-display">
-                            <label>当前区块哈希:</label> <span id="currentBlockHash" class="hash-display">Loading...</span>
+                            <label>Current Block Hash:</label> <span id="currentBlockHash" class="hash-display">Loading...</span>
                         </div>
                         <div class="info-grid">
                             <div>
-                                <label>当前区块高度:</label> <span id="currentBlockHeight">Loading...</span>
+                                <label>Current Block Height:</label> <span id="currentBlockHeight">Loading...</span>
                             </div>
                             <div>
-                                <label>区块时间:</label> <span id="currentBlockTime">Loading...</span>
+                                <label>Block Time:</label> <span id="currentBlockTime">Loading...</span>
                             </div>
                             <div>
-                                <label>难度:</label> <span id="currentBlockDifficulty">Loading...</span>
+                                <label>Difficulty:</label> <span id="currentBlockDifficulty">Loading...</span>
                             </div>
                         </div>
                     </div>
@@ -154,21 +154,21 @@
             <!-- Right Column: Send Transaction and Transaction History -->
             <div class="right-column">
                 <div class="section">
-                    <h2>发送交易</h2>
+                    <h2>Send Transaction</h2>
                     <div class="form-group">
-                        <label>接收地址:</label>
-                        <input type="text" id="toAddress" placeholder="输入接收方地址"
+                        <label>Recipient Address:</label>
+                        <input type="text" id="toAddress" placeholder="Enter recipient address"
                             value="">
                     </div>
                     <div class="form-group">
-                        <label>数量 (DOGE):</label>
-                        <input type="number" id="amount" step="0.00000001" placeholder="发送数量">
+                        <label>Amount (DOGE):</label>
+                        <input type="number" id="amount" step="0.00000001" placeholder="Send amount">
                     </div>
                     <div class="form-group">
-                        <label>手续费 (DOGE):</label>
+                        <label>Fee (DOGE):</label>
                         <div class="fee-input-group">
-                            <input type="number" id="fee" value="0.2" step="0.1" placeholder="手动输入或计算">
-                            <button id="calculateFeeBtn" class="copy-btn" style="margin-left: 8px;">预估手续费</button>
+                            <input type="number" id="fee" value="0.2" step="0.1" placeholder="Manual input or calculate">
+                            <button id="calculateFeeBtn" class="copy-btn" style="margin-left: 8px;">Estimate Fee</button>
                             
                             <span id="estimatedFee" class="info-display"
                                 style="padding: 4px 8px; font-size: 12px; flex-grow: 1; text-align: right;">0.00000000
@@ -179,55 +179,55 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>OP_RETURN 数据 (可选):</label>
+                        <label>OP_RETURN Data (Optional):</label>
                         <div class="op-return-format">
                             <div class="op-return-options">
                                 <label>
-                                    <input type="radio" name="opReturnFormat" id="opReturnFormatString" value="string" checked> 字符串
+                                    <input type="radio" name="opReturnFormat" id="opReturnFormatString" value="string" checked> String
                                 </label>
                                 <label>
-                                    <input type="radio" name="opReturnFormat" id="opReturnFormatHex" value="hex"> 十六进制
+                                    <input type="radio" name="opReturnFormat" id="opReturnFormatHex" value="hex"> Hexadecimal
                                 </label>
                             </div>
                             <select id="opReturnFormat" style="display: none;">
-                                <option value="string">字符串</option>
-                                <option value="hex">十六进制</option>
+                                <option value="string">String</option>
+                                <option value="hex">Hexadecimal</option>
                             </select>
                         </div>
                         <textarea id="opReturnData" rows="3"
-                            placeholder="输入数据内容&#10;字符串模式: Hello Dogecoin!&#10;十六进制模式: 48656c6c6f20446f6765636f696e21&#10;最大80字节"></textarea>
-                        <small id="opReturnHelp">OP_RETURN允许在交易中包含任意数据，永久记录在区块链上</small>
+                            placeholder="Enter data content&#10;String mode: Hello Dogecoin!&#10;Hexadecimal mode: 48656c6c6f20446f6765636f696e21&#10;Maximum 80 bytes"></textarea>
+                        <small id="opReturnHelp">OP_RETURN allows including arbitrary data in transactions, permanently recorded on blockchain</small>
                     </div>
                     <div style="display: flex; gap: 5px; margin-bottom: 8px;">
-                        <button id="sendTransactionBtn" style="flex: 1;">发送交易</button>
+                        <button id="sendTransactionBtn" style="flex: 1;">Send Transaction</button>
                     </div>
                 </div>
                 <!-- Transaction History moved here, under Send Transaction -->
                 <div class="section">
-                    <h2>交易记录</h2>
+                    <h2>Transaction History</h2>
                     <div class="transaction-lists">
                         <div class="pending-transactions">
-                            <h3>待确认交易</h3>
+                            <h3>Pending Transactions</h3>
                             <div class="transaction-list" id="pendingTransactions">
-                                <div class="no-transactions">暂无待确认交易</div>
+                                <div class="no-transactions">No pending transactions</div>
                             </div>
                         </div>
                         <div class="broadcasted-transactions">
-                            <h3>已处理交易 (本地缓存)</h3>
+                            <h3>Processed Transactions (Local Cache)</h3>
                             <table class="transaction-table" id="broadcastedTransactionsTable">
                                 <thead>
                                     <tr>
                                         <th>TXID</th>
-                                        <th>数量 (DOGE)</th>
-                                        <th>接收方</th>
-                                        <th>状态</th>
-                                        <th>区块</th>
-                                        <th>确认时间</th>
+                                        <th>Amount (DOGE)</th>
+                                        <th>Recipient</th>
+                                        <th>Status</th>
+                                        <th>Block</th>
+                                        <th>Confirmation Time</th>
                                     </tr>
                                 </thead>
                                 <tbody id="broadcastedTransactions"></tbody>
                             </table>
-                            <div id="noBroadcastedTransactions" class="no-transactions" style="display: none;">暂无已处理交易
+                            <div id="noBroadcastedTransactions" class="no-transactions" style="display: none;">No processed transactions
                             </div>
                         </div>
                     </div>
@@ -237,11 +237,11 @@
 
 
         <div class="footer-info">
-            <p>⚠️ 这是测试网钱包，仅用于开发和测试目的</p>
-            <p>请勿在主网使用，私钥请妥善保管</p>
-            <p>💡 支持完整的钱包功能：生成、导入、余额查询、交易发送</p>
-            <p>🔧 本地环境自动使用 CORS 代理解决跨域问题</p>
-            <p>💰 获取测试币：<a href="https://faucet.doge.toys/" target="_blank">faucet.doge.toys</a></p>
+            <p>⚠️ This is a testnet wallet for development and testing purposes only</p>
+            <p>Do not use on mainnet, keep your private keys secure</p>
+            <p>💡 Supports complete wallet functionality: generation, import, balance query, transaction sending</p>
+            <p>🔧 Local environment automatically uses CORS proxy to solve cross-origin issues</p>
+            <p>💰 Get test coins: <a href="https://faucet.doge.toys/" target="_blank">faucet.doge.toys</a></p>
         </div>
     </div>
 
