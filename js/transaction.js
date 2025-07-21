@@ -77,7 +77,7 @@ function createScriptPubKey(address) {
         return 'a914' + scriptHash + '87';
     } else {
         console.error('Unsupported address type, version byte:', versionByte);
-        throw new Error('不支持的地址类型');
+        throw new Error('Unsupported address type');
     }
 }
 
@@ -163,13 +163,13 @@ async function refreshBalanceAndUpdateUI() {
 
 async function calculateFee() {
     if (!wallet.address) {
-        showAlert('请先创建或导入钱包', 'error');
+        showAlert('Please create or import wallet first', 'error');
         return;
     }
 
     const amount = parseFloat(document.getElementById('amount').value);
     if (isNaN(amount) || amount <= 0) {
-        showAlert('请输入有效的金额', 'error');
+        showAlert('Please enter valid amount', 'error');
         return;
     }
     const amountSatoshis = Math.round(amount * 1e8);
@@ -177,7 +177,7 @@ async function calculateFee() {
     try {
         const utxos = await getUTXOs(wallet.address);
         if (!utxos || utxos.length === 0) {
-            showAlert('没有可用的UTXO来计算费用', 'error');
+            showAlert('No available UTXOs to calculate fee', 'error');
             return;
         }
 
@@ -196,15 +196,15 @@ async function calculateFee() {
         // For fee calculation, consider all outputs (recipient, change, optional OP_RETURN)
         const selectionResult = selectUTXOs(utxos, amountSatoshis, 100, opReturnDataLength); // 100 sat/byte fee rate
         if (!selectionResult) {
-            showAlert('余额不足以支付该金额，无法估算费用', 'error');
+            showAlert('Insufficient balance to pay this amount, cannot estimate fee', 'error');
             return;
         }
 
         const { estimatedFee } = selectionResult;
         document.getElementById('estimatedFee').textContent = (estimatedFee / 1e8).toFixed(8) + " DOGE";
-        showAlert('预估手续费计算成功', 'success');
+        showAlert('Fee estimation successful', 'success');
     } catch (error) {
-        showAlert('费用计算失败: ' + error.message, 'error');
+        showAlert('Fee calculation failed: ' + error.message, 'error');
     }
 }
 
@@ -249,7 +249,7 @@ function viewPendingTransactions() { // Made synchronous as it reads from memory
 
     const currentWalletAddress = wallet.address;
     if (!currentWalletAddress) {
-        pendingList.innerHTML = '<li>请先选择钱包。</li>';
+        pendingList.innerHTML = '<li>Please select wallet first.</li>';
         return;
     }
     // Filter pending transactions from the in-memory array for the current wallet
@@ -258,11 +258,11 @@ function viewPendingTransactions() { // Made synchronous as it reads from memory
                                              .sort((a,b) => b.broadcastTime - a.broadcastTime);
 
     if (dbPendingTxs.length === 0) {
-        pendingList.innerHTML = '<li>没有待处理的交易。</li>';
+        pendingList.innerHTML = '<li>No pending transactions.</li>';
         return;
     }
     pendingList.innerHTML = dbPendingTxs.map(tx =>
-        `<li>TXID: <a href="https://sochain.com/tx/DOGETEST/${tx.txid}" target="_blank">${tx.txid.substring(0,10)}...</a> - 发送 ${tx.amount} DOGE 到 ${tx.recipient.substring(0,10)}... - 状态: ${tx.status}</li>`
+        `<li>TXID: <a href="https://sochain.com/tx/DOGETEST/${tx.txid}" target="_blank">${tx.txid.substring(0,10)}...</a> - Send ${tx.amount} DOGE to ${tx.recipient.substring(0,10)}... - Status: ${tx.status}</li>`
     ).join('');
 }
 
@@ -275,7 +275,7 @@ function viewBroadcastedTransactions() { // Made synchronous
     const currentWalletAddress = wallet.address;
     if (!currentWalletAddress) {
         broadcastedTableBody.innerHTML = ''; // Clear table body
-        noBroadcastedTransactionsDiv.innerHTML = '请先选择钱包。';
+        noBroadcastedTransactionsDiv.innerHTML = 'Please select wallet first.';
         noBroadcastedTransactionsDiv.style.display = 'block';
         document.getElementById('broadcastedTransactionsTable').style.display = 'none';
         return;
@@ -320,7 +320,7 @@ async function createActualTransaction(selectedUtxos, recipientAddress, amountTo
     const changeAmountSatoshis = totalInputAmountSatoshis - amountToSendSatoshis - feeSatoshis;
 
     if (changeAmountSatoshis < 0) {
-        throw new Error('计算后资金不足 (inputs - amount - fee < 0)');
+        throw new Error('Insufficient funds after calculation (inputs - amount - fee < 0)');
     }
 
     const inputs = [];
@@ -430,16 +430,16 @@ async function createActualTransaction(selectedUtxos, recipientAddress, amountTo
 
 async function sendTransaction() {
     if (!wallet.address || !wallet.privateKey) {
-        showAlert('请先创建或导入钱包', 'error');
+        showAlert('Please create or import wallet first', 'error');
         return;
     }
 
     const amount = parseFloat(document.getElementById('amount').value);
     const recipientAddress = document.getElementById('toAddress').value.trim();
-    const userFee = parseFloat(document.getElementById('fee').value) || 0; // 获取用户输入的手续费
+    const userFee = parseFloat(document.getElementById('fee').value) || 0; // Get user input fee
 
     if (isNaN(amount) || amount <= 0 || !recipientAddress) {
-        showAlert('请输入金额和接收地址', 'error');
+        showAlert('Please enter amount and recipient address', 'error');
         return;
     }
     const amountSatoshis = Math.round(amount * 1e8);
@@ -447,7 +447,7 @@ async function sendTransaction() {
     try {
         const utxos = await getUTXOs(wallet.address);
         if (!utxos || utxos.length === 0) {
-            showAlert('没有可用的UTXO', 'error');
+            showAlert('No available UTXOs', 'error');
             return;
         }
 
@@ -464,7 +464,7 @@ async function sendTransaction() {
             
             // Validate OP_RETURN data size (max 80 bytes for standard relay)
             if (opReturnDataLength > 80) {
-                showAlert('OP_RETURN 数据长度不能超过 80 字节', 'error');
+                showAlert('OP_RETURN data length cannot exceed 80 bytes', 'error');
                 return;
             }
         }
@@ -474,33 +474,33 @@ async function sendTransaction() {
         let totalInputAmount;
 
         if (userFee > 0) {
-            // 用户输入了非零手续费，使用用户指定的手续费
+            // User entered non-zero fee, use user specified fee
             actualFeeSatoshis = Math.round(userFee * 1e8);
             
-            // 使用用户指定的手续费选择UTXO
-            const feePerByte = 100; // 这里只是用于UTXO选择的估算
+            // Use user specified fee to select UTXOs
+            const feePerByte = 100; // This is only used for UTXO selection estimation
             let selectionResult = selectUTXOs(utxos, amountSatoshis, feePerByte, opReturnDataLength);
             
             if (!selectionResult) {
-                showAlert('余额不足以支付金额和预估手续费', 'error');
+                showAlert('Insufficient balance to pay amount and estimated fee', 'error');
                 return;
             }
             
             actualSelectedUtxos = selectionResult.selectedUtxos;
             totalInputAmount = selectionResult.totalInputAmount;
             
-            // 检查用户指定的手续费是否足够
+            // Check if user specified fee is sufficient
             if (totalInputAmount < amountSatoshis + actualFeeSatoshis) {
-                showAlert('余额不足以支付指定的金额和手续费', 'error');
+                showAlert('Insufficient balance to pay specified amount and fee', 'error');
                 return;
             }
         } else {
-            // 用户输入的手续费为0，使用自动计算的手续费
+            // User entered fee is 0, use automatically calculated fee
             const feePerByte = 100; // satoshis per byte
             let selectionResult = selectUTXOs(utxos, amountSatoshis, feePerByte, opReturnDataLength);
 
             if (!selectionResult) {
-                showAlert('余额不足以支付金额和预估手续费', 'error');
+                showAlert('Insufficient balance to pay amount and estimated fee', 'error');
                 return;
             }
             
@@ -512,7 +512,7 @@ async function sendTransaction() {
         let changeAmountSatoshis = totalInputAmount - amountSatoshis - actualFeeSatoshis;
         
         if (changeAmountSatoshis < 0) {
-            showAlert('计算后余额不足 (totalInput - amount - fee < 0)，请调整金额或等待更多UTXO', 'error');
+            showAlert('Insufficient balance after calculation (totalInput - amount - fee < 0), please adjust amount or wait for more UTXOs', 'error');
             return;
         }
 
@@ -554,15 +554,15 @@ async function sendTransaction() {
             opReturnData: opReturnData || null
         }, wallet.address);
 
-        let successMessage = '交易发送成功，TXID: ' + broadcastedTxid;
+        let successMessage = 'Transaction sent successfully, TXID: ' + broadcastedTxid;
         if (opReturnData) {
-            successMessage += '，包含 OP_RETURN 数据: ' + opReturnData.substring(0, 20) + (opReturnData.length > 20 ? '...' : '');
+            successMessage += ', includes OP_RETURN data: ' + opReturnData.substring(0, 20) + (opReturnData.length > 20 ? '...' : '');
         }
         showAlert(successMessage, 'success');
         refreshBalanceAndUpdateUI(); // Refresh balance after sending
     } catch (error) {
-        console.error("交易发送失败详情:", error);
-        showAlert('交易发送失败: ' + error.message, 'error');
+        console.error("Transaction send failed details:", error);
+        showAlert('Transaction send failed: ' + error.message, 'error');
     }
 }
 
@@ -571,7 +571,7 @@ function openInBrowser() {
         const url = `https://sochain.com/address/DOGETEST/${wallet.address}`;
         window.open(url, '_blank');
     } else {
-        showAlert('请先选择或生成钱包', 'error');
+        showAlert('Please select or generate wallet first', 'error');
     }
 }
 
@@ -580,7 +580,7 @@ function openInBrowser() {
 
 
 function testConnection() {
-    showAlert('连接测试功能尚未实现', 'info');
+    showAlert('Connection test feature not yet implemented', 'info');
 }
 // Historical Transactions
 async function fetchTransactionHistory(address) {
@@ -592,7 +592,7 @@ async function fetchTransactionHistory(address) {
         const response = await fetch(apiUrl); // May need CORS proxy if not using local proxy
         if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`API请求失败: ${response.status} - ${errorText}`);
+            throw new Error(`API request failed: ${response.status} - ${errorText}`);
         }
         const txs = await response.json();
         return txs.map(tx => ({
@@ -603,8 +603,8 @@ async function fetchTransactionHistory(address) {
             block_time: tx.status.block_time ? new Date(tx.status.block_time * 1000).toLocaleString() : 'N/A'
         }));
     } catch (error) {
-        console.error('获取交易历史失败:', error);
-        showAlert('获取交易历史失败: ' + error.message, 'error');
+        console.error('Failed to fetch transaction history:', error);
+        showAlert('Failed to fetch transaction history: ' + error.message, 'error');
         return [];
     }
 }
@@ -614,13 +614,13 @@ function viewTransactionHistory(transactions) {
     if (!historyList) return;
 
     if (transactions.length === 0) {
-        historyList.innerHTML = '<li>没有历史交易记录。</li>';
+        historyList.innerHTML = '<li>No historical transactions.</li>';
         return;
     }
     historyList.innerHTML = transactions.map(tx => `
         <li><strong>TXID:</strong> <a href="https://sochain.com/tx/DOGETEST/${tx.txid}" target="_blank">${tx.txid}</a><br>
-            <strong>状态:</strong> ${tx.confirmed ? `已确认 (区块 ${tx.block_height || 'N/A'})` : '未确认'}<br>
-            <strong>时间:</strong> ${tx.block_time} ${tx.fee ? `<br><strong>手续费:</strong> ${(tx.fee / 1e8).toFixed(8)} DOGE` : ''}</li>`).join('');
+            <strong>Status:</strong> ${tx.confirmed ? `Confirmed (Block ${tx.block_height || 'N/A'})` : 'Unconfirmed'}<br>
+            <strong>Time:</strong> ${tx.block_time} ${tx.fee ? `<br><strong>Fee:</strong> ${(tx.fee / 1e8).toFixed(8)} DOGE` : ''}</li>`).join('');
 }
 
 async function refreshWalletTransactionHistory() {

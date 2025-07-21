@@ -3,13 +3,13 @@ import { wallet } from './wallet.js';
 function updateWalletUI() {
     if (wallet.address) {
         document.getElementById('address').textContent = wallet.address;
-        document.getElementById('privateKey').textContent = wallet.wif || '生成或导入钱包以查看';
+        document.getElementById('privateKey').textContent = wallet.wif || 'Generate or import wallet to view';
         document.getElementById('balance').textContent = `${wallet.balance.toFixed(8)} DOGE`;
         document.getElementById('balance').style.color = wallet.balanceAvailable ? '#38a169' : '#666';
     } else {
-        document.getElementById('address').textContent = '点击生成钱包';
-        document.getElementById('privateKey').textContent = '点击生成钱包'; // This will show WIF once available
-        document.getElementById('balance').textContent = '点击生成钱包';
+        document.getElementById('address').textContent = 'Click Generate Wallet';
+        document.getElementById('privateKey').textContent = 'Click Generate Wallet'; // This will show WIF once available
+        document.getElementById('balance').textContent = 'Click Generate Wallet';
         document.getElementById('balance').style.color = '#666';
     }
     
@@ -82,10 +82,10 @@ function fallbackCopy(text, successMessage) {
         if (successful) {
             showAlert(successMessage, 'success');
         } else {
-            showAlert('复制失败，请手动选择复制', 'error');
+            showAlert('Copy failed, please select and copy manually', 'error');
         }
     } catch (err) {
-        showAlert('复制失败，请手动选择复制', 'error');
+        showAlert('Copy failed, please select and copy manually', 'error');
     }
 }
 

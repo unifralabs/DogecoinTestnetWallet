@@ -34,9 +34,9 @@ async function fetchBalance(address) {
                 };
             }
         }
-        throw new Error('API查询失败: ' + response.status);
+        throw new Error('API query failed: ' + response.status);
     } catch (error) {
-        throw new Error('获取余额失败: ' + error.message);
+        throw new Error('Failed to fetch balance: ' + error.message);
     }
 }
 
@@ -56,7 +56,7 @@ async function getUTXOs(address) {
                 return isConfirmed && hasValue && hasValidTxid && hasValidVout;
             });
         }
-        throw new Error('获取 UTXO 失败: ' + response.status);
+        throw new Error('Failed to get UTXO: ' + response.status);
     } catch (error) {
         throw error;
     }
@@ -77,9 +77,9 @@ async function broadcastTransaction(txHex) {
             const txid = await response.text();
             return txid.trim();
         }
-        throw new Error('广播交易失败: ' + response.status);
+        throw new Error('Failed to broadcast transaction: ' + response.status);
     } catch (error) {
-        throw new Error('广播交易失败: ' + error.message);
+        throw new Error('Failed to broadcast transaction: ' + error.message);
     }
 }
 

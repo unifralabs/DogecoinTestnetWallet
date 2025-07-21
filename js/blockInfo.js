@@ -20,7 +20,7 @@ const updateBlockInfo = async () => {
         document.getElementById('currentBlockTime').textContent = new Date(blockInfo.timestamp * 1000).toLocaleString();
         document.getElementById('currentBlockDifficulty').textContent = blockInfo.difficulty.toFixed(8);
     } catch (error) {
-        console.error('区块信息更新失败:', error);
+        console.error('Block info update failed:', error);
     }
 };
 
