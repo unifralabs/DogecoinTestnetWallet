@@ -23,26 +23,251 @@ function toLittleEndianHex(value, byteLength) {
 }
 
 function selectUTXOs(utxos, amountToSendSatoshis, feePerByte = 100, opReturnDataLength = 0) {
+    // Goal: avoid excessive change by preferring no-change (or dust-change) combinations.
+    // Strategy order:
+    // 1) Try to find a combination that yields no change (leftover < dust), so change can be added to fee.
+    // 2) Otherwise, find a combination that minimizes change with a change output.
+    // 3) Fallback to largest-first greedy selection.
+
+    const DUST_THRESHOLD_SATOSHIS = 1000000; // 0.01 DOGE
+    const extraOutputsForOpReturn = opReturnDataLength > 0 ? 1 : 0;
+
+    if (!Array.isArray(utxos) || utxos.length === 0) {
+        return null;
+    }
+
+    // Prefilter by effective value (avoid inputs that are not worth spending at current fee)
+    const perInputBytes = 148; // P2PKH approx
+    const perInputCost = perInputBytes * feePerByte;
+    const filteredUtxos = Array.isArray(utxos) ? utxos.filter(u => (u?.value ?? 0) > perInputCost) : [];
+
+    const sortedAsc = [...filteredUtxos].sort((a, b) => a.value - b.value);
+    const sortedDesc = [...filteredUtxos].sort((a, b) => b.value - a.value);
+
+    // Performance tuning parameters
+    const now = (typeof performance !== 'undefined' && performance.now) ? () => performance.now() : () => Date.now();
+    const DEADLINE_MS = 25; // time budget for combinational search
+    const deadline = now() + DEADLINE_MS;
+    const MAX_INPUTS = Math.min(6, filteredUtxos.length);
+    const MAX_SMALL = 20; // take up to 20 smallest utxos
+    const MAX_LARGE = 10; // and up to 10 largest utxos
+
+    // Candidate pool: mix of smallest and largest to balance near-target coverage and input count
+    const candidateSmall = sortedAsc.slice(0, Math.min(sortedAsc.length, MAX_SMALL));
+    const candidateLarge = sortedDesc.slice(0, Math.min(sortedDesc.length, MAX_LARGE));
+    const uniqueMap = new Map();
+    for (const u of [...candidateSmall, ...candidateLarge]) {
+        uniqueMap.set(`${u.txid}:${u.vout}`, u);
+    }
+    const candidateUtxos = Array.from(uniqueMap.values()).sort((a, b) => a.value - b.value); // prefer ascending for search
+
+    // Precompute fee tables by input count to avoid repeated calculations
+    const feeNoChangeByInputs = new Array(MAX_INPUTS + 1).fill(0);
+    const feeWithChangeByInputs = new Array(MAX_INPUTS + 1).fill(0);
+    for (let k = 1; k <= MAX_INPUTS; k++) {
+        feeNoChangeByInputs[k] = calculateActualEstimatedFee(k, 1 + extraOutputsForOpReturn, feePerByte, opReturnDataLength);
+        feeWithChangeByInputs[k] = calculateActualEstimatedFee(k, 2 + extraOutputsForOpReturn, feePerByte, opReturnDataLength);
+    }
+    // Lower-bound binary search on ascending array of UTXOs by value
+    function lowerBoundByValue(ascendingArray, targetValue) {
+        let left = 0;
+        let right = ascendingArray.length; // [left, right)
+        while (left < right) {
+            const mid = (left + right) >>> 1;
+            if (ascendingArray[mid].value < targetValue) left = mid + 1; else right = mid;
+        }
+        return left; // index of first element with value >= targetValue (or length if none)
+    }
+
+    // Fast path: single UTXO exact window using binary search
+    const feeNoChangeSingle = feeNoChangeByInputs[1];
+    const minNeededNoChange = amountToSendSatoshis + feeNoChangeSingle;
+    const idxNoChange = lowerBoundByValue(candidateUtxos, minNeededNoChange);
+    if (idxNoChange < candidateUtxos.length) {
+        const utxo = candidateUtxos[idxNoChange];
+        const leftover = utxo.value - minNeededNoChange;
+        if (leftover >= 0 && leftover < DUST_THRESHOLD_SATOSHIS) {
+            return {
+                selectedUtxos: [utxo],
+                totalInputAmount: utxo.value,
+                estimatedFee: feeNoChangeSingle
+            };
+        }
+    }
+
+    // Fast path: single UTXO with change (choose smallest that covers amount + feeWithChange)
+    const feeWithChangeSingle = feeWithChangeByInputs[1];
+    const minNeededWithChange = amountToSendSatoshis + feeWithChangeSingle;
+    const idxWithChange = lowerBoundByValue(candidateUtxos, minNeededWithChange);
+    if (idxWithChange < candidateUtxos.length) {
+        const utxo = candidateUtxos[idxWithChange];
+        const leftover = utxo.value - minNeededWithChange;
+        if (leftover >= DUST_THRESHOLD_SATOSHIS || leftover === 0) {
+            // If leftover is 0 it's effectively no-change; if >= dust it will be a change output
+            return {
+                selectedUtxos: [utxo],
+                totalInputAmount: utxo.value,
+                estimatedFee: feeWithChangeSingle
+            };
+        }
+    }
+
+
+    
+
+    // Helper: attempt to find a combination that produces no change (or dust-level change)
+    function tryFindNoChangeCombo(candidateUtxosLocal) {
+        const maxInputs = Math.min(candidateUtxosLocal.length, MAX_INPUTS);
+
+        // Fast path: single UTXO no-change
+        for (const utxo of candidateUtxosLocal) {
+            const feeNoChange = feeNoChangeByInputs[1];
+            const leftover = utxo.value - amountToSendSatoshis - feeNoChange;
+            if (leftover >= 0 && leftover < DUST_THRESHOLD_SATOSHIS) {
+                return {
+                    selectedUtxos: [utxo],
+                    totalInputAmount: utxo.value,
+                    estimatedFee: feeNoChange
+                };
+            }
+        }
+
+        let best = null; // { selection, sum, fee, leftover }
+        const n = candidateUtxosLocal.length;
+
+        function backtrack(startIndex, selection, currentSum) {
+            if (now() > deadline) return; // time budget exceeded
+            if (selection.length > 0) {
+                const feeNoChange = feeNoChangeByInputs[selection.length] || feeNoChangeByInputs[MAX_INPUTS];
+                const leftover = currentSum - amountToSendSatoshis - feeNoChange;
+                if (leftover >= 0 && leftover < DUST_THRESHOLD_SATOSHIS) {
+                    if (!best || leftover < best.leftover) {
+                        best = { selection: selection.slice(), sum: currentSum, fee: feeNoChange, leftover };
+                        if (leftover === 0) return; // exact match
+                    }
+                }
+            }
+
+            if (selection.length >= maxInputs) return;
+
+            for (let i = startIndex; i < n; i++) {
+                selection.push(candidateUtxosLocal[i]);
+                backtrack(i + 1, selection, currentSum + candidateUtxosLocal[i].value);
+                selection.pop();
+                if (best && best.leftover === 0) return;
+                if (now() > deadline) return; // stop if out of time
+            }
+        }
+
+        backtrack(0, [], 0);
+        if (best) {
+            return {
+                selectedUtxos: best.selection,
+                totalInputAmount: best.sum,
+                estimatedFee: best.fee
+            };
+        }
+        return null;
+    }
+
+    // Helper: attempt to find a combination with change that minimizes leftover (change amount)
+    function tryFindWithChangeCombo(candidateUtxosLocal) {
+        const maxInputs = Math.min(candidateUtxosLocal.length, MAX_INPUTS);
+        const n = candidateUtxosLocal.length;
+        let best = null; // { selection, sum, fee, leftover }
+
+        function backtrack(startIndex, selection, currentSum) {
+            if (now() > deadline) return; // time budget exceeded
+            if (selection.length > 0) {
+                const feeWithChange = feeWithChangeByInputs[selection.length] || feeWithChangeByInputs[MAX_INPUTS];
+                const leftover = currentSum - amountToSendSatoshis - feeWithChange;
+                if (leftover >= 0) {
+                    // Prefer non-dust change; if both are non-dust or both dust, prefer smaller leftover
+                    if (
+                        !best ||
+                        (leftover >= DUST_THRESHOLD_SATOSHIS && best.leftover < DUST_THRESHOLD_SATOSHIS) ||
+                        (leftover >= DUST_THRESHOLD_SATOSHIS && best.leftover >= DUST_THRESHOLD_SATOSHIS && leftover < best.leftover) ||
+                        (leftover < DUST_THRESHOLD_SATOSHIS && best.leftover < DUST_THRESHOLD_SATOSHIS && leftover < best.leftover)
+                    ) {
+                        best = { selection: selection.slice(), sum: currentSum, fee: feeWithChange, leftover };
+                        if (leftover === 0) return; // exact match with change output (rare)
+                    }
+                }
+            }
+
+            if (selection.length >= maxInputs) return;
+
+            for (let i = startIndex; i < n; i++) {
+                selection.push(candidateUtxosLocal[i]);
+                backtrack(i + 1, selection, currentSum + candidateUtxosLocal[i].value);
+                selection.pop();
+                if (best && best.leftover === 0) return;
+                if (now() > deadline) return; // stop if out of time
+            }
+        }
+
+        backtrack(0, [], 0);
+        if (best) {
+            return {
+                selectedUtxos: best.selection,
+                totalInputAmount: best.sum,
+                estimatedFee: best.fee
+            };
+        }
+        return null;
+    }
+
+    // Fast greedy pass to approach target quickly with minimal change using ascending order
+    function greedyNearTarget(candidateUtxosLocal) {
+        let currentTotal = 0;
+        const picked = [];
+        let best = null; // { picked, total, fee, leftover }
+        for (let i = 0; i < candidateUtxosLocal.length; i++) {
+            picked.push(candidateUtxosLocal[i]);
+            currentTotal += candidateUtxosLocal[i].value;
+            const k = picked.length;
+            const fee = feeWithChangeByInputs[k] || feeWithChangeByInputs[MAX_INPUTS];
+            const needed = amountToSendSatoshis + fee;
+            if (currentTotal >= needed) {
+                const leftover = currentTotal - needed;
+                if (!best || leftover < best.leftover) {
+                    best = { picked: picked.slice(), total: currentTotal, fee, leftover };
+                    if (leftover === 0) break;
+                }
+            }
+            if (k >= MAX_INPUTS || now() > deadline) break;
+        }
+        if (best) {
+            return {
+                selectedUtxos: best.picked,
+                totalInputAmount: best.total,
+                estimatedFee: best.fee
+            };
+        }
+        return null;
+    }
+
+    // 1) Try no-change (or dust-level change) combinations
+    const noChangeResult = tryFindNoChangeCombo(candidateUtxos);
+    if (noChangeResult) return noChangeResult;
+
+    // 1.5) Fast greedy aiming near target
+    const greedyResult = greedyNearTarget(candidateUtxos);
+    if (greedyResult) return greedyResult;
+
+    // 2) Try with-change combinations minimizing leftover (bounded by time budget and input count)
+    const withChangeResult = tryFindWithChangeCombo(candidateUtxos);
+    if (withChangeResult) return withChangeResult;
+
+    // 3) Fallback: greedy largest-first
     let selectedUtxos = [];
     let currentTotalValue = 0;
     let estimatedFee = 0;
-
-    // Sort UTXOs: smallest first to try and match amount, or largest first to minimize inputs
-    // For simplicity, using smallest first. Could be optimized.
-    const sortedUtxos = [...utxos].sort((a, b) => a.value - b.value); 
-
-    for (const utxo of sortedUtxos) {
+    for (const utxo of sortedDesc) {
         selectedUtxos.push(utxo);
         currentTotalValue += utxo.value;
-
-        // Estimate fee with current selected inputs and outputs (recipient, change, optional OP_RETURN)
-        // This is iterative and approximate.
-        let numOutputs = 2; // Base: recipient and change
-        if (opReturnDataLength > 0) {
-            numOutputs += 1; // Add OP_RETURN output
-        }
+        let numOutputs = 2 + extraOutputsForOpReturn; // recipient + change (+ op_return if any)
         estimatedFee = calculateActualEstimatedFee(selectedUtxos.length, numOutputs, feePerByte, opReturnDataLength);
-
         if (currentTotalValue >= (amountToSendSatoshis + estimatedFee)) {
             return {
                 selectedUtxos: selectedUtxos,

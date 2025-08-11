@@ -1,7 +1,7 @@
 body {
     font-family: Arial, sans-serif;
-    max-width: 1400px; /* 增加页面整体宽度 */
-    margin: 0 auto; /* 居中显示 */
+    max-width: 1400px; /* Increase page overall width */
+    margin: 0 auto; /* Center display */
     padding: 10px;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     min-height: 100vh;
@@ -69,8 +69,8 @@ button {
     font-size: 14px;
     margin: 3px;
     display: inline-block;
-    margin-top: 0px; /* 调整按钮位置 */
-    flex-shrink: 0; /* 防止按钮缩小 */
+    margin-top: 0px; /* Adjust button position */
+    flex-shrink: 0; /* Prevent button shrinking */
 }
 
 button:hover {
@@ -88,14 +88,14 @@ button:hover {
 
 .balance {
     font-size: 20px;
-    /* font-weight: bold; */ /* 调整为非粗体，使其更像信息展示而非标题 */
+    /* font-weight: bold; */ /* Adjust to non-bold for info display rather than title */
     color: #38a169;
-    text-align: left; /* 改为左对齐，与其他信息一致 */
-    padding: 8px; /* 调整内边距 */
-    background: #f0f0f0; /* 与其他 info-display 样式统一 */
+    text-align: left; /* Change to left align, consistent with other info */
+    padding: 8px; /* Adjust inner padding */
+    background: #f0f0f0; /* Unify with other info-display styles */
     border-radius: 8px;
-    /* border: 2px solid #68d391; */ /* 移除边框，使其更简洁 */
-    word-break: break-all; /* 确保长数字也能换行 */
+    /* border: 2px solid #68d391; */ /* Remove border for cleaner look */
+    word-break: break-all; /* Ensure long numbers can wrap */
 }
 
 .alert-container {
@@ -264,19 +264,19 @@ select {
 }
 
 .address-container {
-    display: flex; /* 使用 Flexbox 实现同行布局 */
-    align-items: center; /* 垂直居中对齐 */
-    gap: 10px; /* 按钮与地址之间的间距 */
+    display: flex; /* Use Flexbox for same-row layout */
+    align-items: center; /* Vertical center alignment */
+    gap: 10px; /* Space between button and address */
 }
 
 .op-return-options {
     display: flex;
     align-items: center;
-    gap: 10px; /* 控制按钮之间的间距 */
+    gap: 10px; /* Control spacing between buttons */
 }
 
 .op-return-options input[type="radio"] {
-    margin-right: 5px; /* 调整单选按钮与文本之间的间距 */
+    margin-right: 5px; /* Adjust spacing between radio button and text */
 }
 
 .transaction-lists {
@@ -405,11 +405,11 @@ select {
     border-radius: 4px;
     border: 1px solid #eee;
     font-size: 0.9em;
-    margin-bottom: 10px; /* 与下面的 info-grid 保持间距 */
+    margin-bottom: 10px; /* Maintain spacing with info-grid below */
 }
 .network-status-section .info-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr); /* 改为3列，或者 auto-fit 配合更小的 minmax */
+    grid-template-columns: repeat(3, 1fr); /* Change to 3 columns, or auto-fit with smaller minmax */
     gap: 10px;
 }
 
@@ -459,10 +459,10 @@ select {
 }
 .fee-input-group {
     display: flex;
-    align-items: center; /* 垂直居中对齐 */
+    align-items: center; /* Vertical center alignment */
 }
 
 .fee-input-group input[type="number"] {
-    flex-basis: 120px; /* 给输入框一个基础宽度 */
-    flex-grow: 0; /* 不允许输入框增长 */
+    flex-basis: 120px; /* Give input box a base width */
+    flex-grow: 0; /* Don't allow input box to grow */
 }
