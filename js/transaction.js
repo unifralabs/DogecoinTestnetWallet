@@ -1,5 +1,5 @@
 import { wallet } from './wallet.js';
-import { getUTXOs, broadcastTransaction, fetchMempoolTransactions } from './network.js';
+import { getUTXOs, getVerifiedUTXOs, broadcastTransaction, fetchMempoolTransactions, fetchBalance } from './network.js';
 import { sha256Double } from './crypto-utils.js';
 import { saveBroadcastedTxToDB, getBroadcastedTxsFromDB, getPendingTxsFromDB, updateTxStatusInDB } from './storage.js';
 import { showAlert, updateWalletUI } from './ui.js'; // Added updateWalletUI for balance refresh
@@ -22,7 +22,9 @@ function toLittleEndianHex(value, byteLength) {
     return littleEndianHex;
 }
 
-function selectUTXOs(utxos, amountToSendSatoshis, feePerByte = 100, opReturnDataLength = 0) {
+const DEFAULT_FEE_RATE_SAT_PER_BYTE = 1000; // 0.01 DOGE per kB (relay-friendly)
+
+function selectUTXOs(utxos, amountToSendSatoshis, feePerByte = DEFAULT_FEE_RATE_SAT_PER_BYTE, opReturnDataLength = 0) {
     // Goal: avoid excessive change by preferring no-change (or dust-change) combinations.
     // Strategy order:
     // 1) Try to find a combination that yields no change (leftover < dust), so change can be added to fee.
@@ -318,8 +320,14 @@ function createOpReturnScript(data, format = 'string') {
         dataHex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
     }
     
-    const dataLength = (dataHex.length / 2).toString(16).padStart(2, '0');
-    return '6a' + dataLength + dataHex;
+    const dataLength = dataHex.length / 2;
+    const dataLenHex = dataLength.toString(16).padStart(2, '0');
+    if (dataLength <= 75) {
+        // OP_RETURN <len> <data>
+        return '6a' + dataLenHex + dataHex;
+    }
+    // For 76..80 bytes, use OP_PUSHDATA1
+    return '6a4c' + dataLenHex + dataHex;
 }
 
 function createSignInputScript(signatureHexWithSighash, publicKeyHex) {
@@ -400,7 +408,7 @@ async function calculateFee() {
     const amountSatoshis = Math.round(amount * 1e8);
 
     try {
-        const utxos = await getUTXOs(wallet.address);
+        const utxos = await getVerifiedUTXOs(wallet.address);
         if (!utxos || utxos.length === 0) {
             showAlert('No available UTXOs to calculate fee', 'error');
             return;
@@ -419,7 +427,7 @@ async function calculateFee() {
         }
 
         // For fee calculation, consider all outputs (recipient, change, optional OP_RETURN)
-        const selectionResult = selectUTXOs(utxos, amountSatoshis, 100, opReturnDataLength); // 100 sat/byte fee rate
+        const selectionResult = selectUTXOs(utxos, amountSatoshis, DEFAULT_FEE_RATE_SAT_PER_BYTE, opReturnDataLength);
         if (!selectionResult) {
             showAlert('Insufficient balance to pay this amount, cannot estimate fee', 'error');
             return;
@@ -670,7 +678,7 @@ async function sendTransaction() {
     const amountSatoshis = Math.round(amount * 1e8);
 
     try {
-        const utxos = await getUTXOs(wallet.address);
+        const utxos = await getVerifiedUTXOs(wallet.address);
         if (!utxos || utxos.length === 0) {
             showAlert('No available UTXOs', 'error');
             return;
@@ -703,7 +711,7 @@ async function sendTransaction() {
             actualFeeSatoshis = Math.round(userFee * 1e8);
             
             // Use user specified fee to select UTXOs
-            const feePerByte = 100; // This is only used for UTXO selection estimation
+            const feePerByte = DEFAULT_FEE_RATE_SAT_PER_BYTE; // For UTXO selection estimation
             let selectionResult = selectUTXOs(utxos, amountSatoshis, feePerByte, opReturnDataLength);
             
             if (!selectionResult) {
@@ -721,7 +729,7 @@ async function sendTransaction() {
             }
         } else {
             // User entered fee is 0, use automatically calculated fee
-            const feePerByte = 100; // satoshis per byte
+            const feePerByte = DEFAULT_FEE_RATE_SAT_PER_BYTE; // satoshis per byte
             let selectionResult = selectUTXOs(utxos, amountSatoshis, feePerByte, opReturnDataLength);
 
             if (!selectionResult) {
