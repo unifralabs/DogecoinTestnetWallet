@@ -306,4 +306,3 @@ document.addEventListener('DOMContentLoaded', () => {
         showAlert('Application initialization failed, please refresh page and try again', 'error');
     });
 });
-initializeApp();

@@ -77,7 +77,14 @@ async function broadcastTransaction(txHex) {
             const txid = await response.text();
             return txid.trim();
         }
-        throw new Error('Failed to broadcast transaction: ' + response.status);
+        // Try to read error body for diagnostics (e.g., min relay fee not met)
+        let errorText = '';
+        try {
+            errorText = await response.text();
+        } catch (_) {
+            // ignore body read errors
+        }
+        throw new Error('Failed to broadcast transaction: ' + response.status + (errorText ? ` - ${errorText}` : ''));
     } catch (error) {
         throw new Error('Failed to broadcast transaction: ' + error.message);
     }
@@ -101,10 +108,30 @@ async function fetchMempoolTransactions(address) {
     }
 }
 
+// Verify UTXOs are still unspent using Electrs outspend endpoint
+async function getVerifiedUTXOs(address) {
+    const baseUrl = getElectrsUrl();
+    const utxos = await getUTXOs(address);
+    if (!Array.isArray(utxos) || utxos.length === 0) return [];
+    const checks = await Promise.all(
+        utxos.map(async (u) => {
+            try {
+                const resp = await fetch(`${baseUrl}/tx/${u.txid}/outspend/${u.vout}`);
+                if (!resp.ok) return null;
+                return await resp.json();
+            } catch (_) {
+                return null;
+            }
+        })
+    );
+    return utxos.filter((u, i) => checks[i] && checks[i].spent === false);
+}
+
 export {
     getElectrsUrl,
     fetchBalance,
     getUTXOs,
+    getVerifiedUTXOs,
     broadcastTransaction,
     fetchMempoolTransactions,
     useElectrs,
