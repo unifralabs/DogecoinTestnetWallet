@@ -43,6 +43,23 @@ h1 {
     margin: 12px 0;
 }
 
+.form-group.horizontal {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.form-group.horizontal label {
+    display: inline-block;
+    margin-bottom: 0;
+    min-width: 120px;
+    flex-shrink: 0;
+}
+
+.form-group.horizontal input {
+    flex: 1;
+}
+
 label {
     display: block;
     margin-bottom: 4px;

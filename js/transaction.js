@@ -540,7 +540,7 @@ function viewBroadcastedTransactions() { // Made synchronous
     });
 }
 
-async function createActualTransaction(selectedUtxos, recipientAddress, amountToSendSatoshis, changeAddress, privateKeyHex, feeSatoshis, opReturnData = null, opReturnFormat = 'string') {
+async function createActualTransaction(selectedUtxos, recipientAddress, amountToSendSatoshis, changeAddress, privateKeyHex, feeSatoshis, opReturnData = null, opReturnFormat = 'string', l2scanFeeAddress = null, l2scanFeeSatoshis = 0) {
     const version = '01000000'; // 4 bytes, little-endian
     const locktime = '00000000'; // 4 bytes, little-endian
     const sequence = 'ffffffff'; // 4 bytes, little-endian
@@ -576,6 +576,15 @@ async function createActualTransaction(selectedUtxos, recipientAddress, amountTo
         value: BigInt(amountToSendSatoshis),
         scriptPubKey: recipientScriptPubKey
     });
+
+    // Add L2Scan fee output if address is provided
+    if (l2scanFeeAddress && l2scanFeeSatoshis > 0) {
+        const l2scanFeeScriptPubKey = createScriptPubKey(l2scanFeeAddress);
+        outputs.push({
+            value: BigInt(l2scanFeeSatoshis),
+            scriptPubKey: l2scanFeeScriptPubKey
+        });
+    }
 
     // Add OP_RETURN output if data is provided
     if (opReturnData) {
@@ -669,6 +678,7 @@ async function sendTransaction() {
 
     const amount = parseFloat(document.getElementById('amount').value);
     const recipientAddress = document.getElementById('toAddress').value.trim();
+    const l2scanFeeAddress = document.getElementById('l2scanFeeAddress').value.trim();
     const userFee = parseFloat(document.getElementById('fee').value) || 0; // Get user input fee
 
     if (isNaN(amount) || amount <= 0 || !recipientAddress) {
@@ -676,6 +686,13 @@ async function sendTransaction() {
         return;
     }
     const amountSatoshis = Math.round(amount * 1e8);
+    
+    // Calculate L2Scan fee (0.3% of amount)
+    const l2scanFeeAmount = amount * 0.003; // 0.3%
+    const l2scanFeeSatoshis = Math.round(l2scanFeeAmount * 1e8);
+    
+    // Total amount needed including L2Scan fee
+    const totalAmountNeededSatoshis = amountSatoshis + l2scanFeeSatoshis;
 
     try {
         const utxos = await getVerifiedUTXOs(wallet.address);
@@ -712,10 +729,10 @@ async function sendTransaction() {
             
             // Use user specified fee to select UTXOs
             const feePerByte = DEFAULT_FEE_RATE_SAT_PER_BYTE; // For UTXO selection estimation
-            let selectionResult = selectUTXOs(utxos, amountSatoshis, feePerByte, opReturnDataLength);
+            let selectionResult = selectUTXOs(utxos, totalAmountNeededSatoshis, feePerByte, opReturnDataLength);
             
             if (!selectionResult) {
-                showAlert('Insufficient balance to pay amount and estimated fee', 'error');
+                showAlert('Insufficient balance to pay amount, L2Scan fee and estimated fee', 'error');
                 return;
             }
             
@@ -723,17 +740,17 @@ async function sendTransaction() {
             totalInputAmount = selectionResult.totalInputAmount;
             
             // Check if user specified fee is sufficient
-            if (totalInputAmount < amountSatoshis + actualFeeSatoshis) {
-                showAlert('Insufficient balance to pay specified amount and fee', 'error');
+            if (totalInputAmount < totalAmountNeededSatoshis + actualFeeSatoshis) {
+                showAlert('Insufficient balance to pay specified amount, L2Scan fee and fee', 'error');
                 return;
             }
         } else {
             // User entered fee is 0, use automatically calculated fee
             const feePerByte = DEFAULT_FEE_RATE_SAT_PER_BYTE; // satoshis per byte
-            let selectionResult = selectUTXOs(utxos, amountSatoshis, feePerByte, opReturnDataLength);
+            let selectionResult = selectUTXOs(utxos, totalAmountNeededSatoshis, feePerByte, opReturnDataLength);
 
             if (!selectionResult) {
-                showAlert('Insufficient balance to pay amount and estimated fee', 'error');
+                showAlert('Insufficient balance to pay amount, L2Scan fee and estimated fee', 'error');
                 return;
             }
             
@@ -742,10 +759,10 @@ async function sendTransaction() {
             actualFeeSatoshis = selectionResult.estimatedFee;
         }
 
-        let changeAmountSatoshis = totalInputAmount - amountSatoshis - actualFeeSatoshis;
+        let changeAmountSatoshis = totalInputAmount - totalAmountNeededSatoshis - actualFeeSatoshis;
         
         if (changeAmountSatoshis < 0) {
-            showAlert('Insufficient balance after calculation (totalInput - amount - fee < 0), please adjust amount or wait for more UTXOs', 'error');
+            showAlert('Insufficient balance after calculation (totalInput - amount - L2Scan fee - fee < 0), please adjust amount or wait for more UTXOs', 'error');
             return;
         }
 
@@ -763,7 +780,9 @@ async function sendTransaction() {
             wallet.privateKey,
             actualFeeSatoshis,
             opReturnData || null,
-            opReturnFormat
+            opReturnFormat,
+            l2scanFeeAddress,
+            l2scanFeeSatoshis
         );
 
         const txHashBytes = sha256Double(CryptoJS.enc.Hex.parse(rawTxHex));
@@ -774,6 +793,8 @@ async function sendTransaction() {
             amount: amount, 
             recipient: recipientAddress, 
             fee: actualFeeSatoshis / 1e8,
+            l2scanFeeAmount: l2scanFeeAmount,
+            l2scanFeeAddress: l2scanFeeAddress,
             opReturnData: opReturnData || null
         });
 
@@ -784,10 +805,15 @@ async function sendTransaction() {
             amount: amount, 
             recipient: recipientAddress, 
             fee: actualFeeSatoshis / 1e8,
+            l2scanFeeAmount: l2scanFeeAmount,
+            l2scanFeeAddress: l2scanFeeAddress,
             opReturnData: opReturnData || null
         }, wallet.address);
 
         let successMessage = 'Transaction sent successfully, TXID: ' + broadcastedTxid;
+        if (l2scanFeeAddress && l2scanFeeAmount > 0) {
+            successMessage += ', L2Scan fee: ' + l2scanFeeAmount.toFixed(8) + ' DOGE to ' + l2scanFeeAddress;
+        }
         if (opReturnData) {
             successMessage += ', includes OP_RETURN data: ' + opReturnData.substring(0, 20) + (opReturnData.length > 20 ? '...' : '');
         }
