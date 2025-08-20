@@ -247,6 +247,27 @@ function addEventListeners() {
             }
         });
     }
+
+    // Add event listener for DogeOS Address input
+    const dogeosAddressInput = document.getElementById('dogeosAddress');
+    if (dogeosAddressInput) {
+        dogeosAddressInput.addEventListener('input', () => {
+            const dogeosAddress = dogeosAddressInput.value.trim();
+            const opReturnDataInput = document.getElementById('opReturnData');
+            const opReturnFormatString = document.getElementById('opReturnFormatString');
+            const opReturnFormatHex = document.getElementById('opReturnFormatHex');
+            
+            if (dogeosAddress && opReturnDataInput) {
+                // Copy DogeOS Address to OP_RETURN data
+                opReturnDataInput.value = dogeosAddress.lower().replace('0x','00');
+                
+                // Set format to hex mode
+                if (opReturnFormatHex) {
+                    opReturnFormatHex.checked = true;
+                }
+            }
+        });
+    }
     const copyPrivateKeyBtn = document.getElementById('copyPrivateKeyBtn');
     if (copyPrivateKeyBtn) {
         copyPrivateKeyBtn.addEventListener('click', () => {
