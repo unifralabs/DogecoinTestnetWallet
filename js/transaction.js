@@ -115,7 +115,7 @@ function selectUTXOs(utxos, amountToSendSatoshis, feePerByte = DEFAULT_FEE_RATE_
     }
 
 
-    
+
 
     // Helper: attempt to find a combination that produces no change (or dust-level change)
     function tryFindNoChangeCombo(candidateUtxosLocal) {
@@ -287,11 +287,11 @@ function createScriptPubKey(address) {
     const decoded = bs58.decode(address);
     const hex = decoded.map(b => b.toString(16).padStart(2, '0')).join('');
     console.log('Decoded hex:', hex);
-    
+
     // Check the version byte to determine address type
     const versionByte = hex.substring(0, 2);
     console.log('Version byte:', versionByte);
-    
+
     if (versionByte === '6f' || versionByte === '71') {
         // Dogecoin testnet P2PKH (starts with 'n' or 'm')
         const pubKeyHash = hex.substring(2, 42);
@@ -310,7 +310,7 @@ function createScriptPubKey(address) {
 
 function createOpReturnScript(data, format = 'string') {
     if (!data) return '';
-    
+
     let dataHex = '';
     if (format === 'hex') {
         dataHex = data.replace(/\s+/g, '').toLowerCase();
@@ -319,7 +319,7 @@ function createOpReturnScript(data, format = 'string') {
         const bytes = encoder.encode(data);
         dataHex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
     }
-    
+
     const dataLength = dataHex.length / 2;
     const dataLenHex = dataLength.toString(16).padStart(2, '0');
     if (dataLength <= 75) {
@@ -372,14 +372,14 @@ function calculateActualEstimatedFee(numInputs, numOutputs, feeRatePerByte = 100
     const baseTxSize = 10; // Approx: version (4) + locktime (4) + input_count (1) + output_count (1)
     const inputSize = numInputs * 148; // Approx: 32(prevTxId) + 4(vout) + 1(scriptLen) + 107(scriptSig) + 4(sequence)
     let outputSize = numOutputs * 34; // Approx: 8(value) + 1(scriptLen) + 25(scriptPubKey for P2PKH)
-    
+
     // Add extra size for OP_RETURN output if present
     if (opReturnDataLength > 0) {
         // OP_RETURN output: 8(value) + 1(scriptLen) + 2(OP_RETURN + length) + dataLength
         const opReturnOutputSize = 8 + 1 + 2 + opReturnDataLength;
         outputSize += opReturnOutputSize - 34; // Replace one standard output size with OP_RETURN size
     }
-    
+
     const estimatedSize = baseTxSize + inputSize + outputSize;
     return estimatedSize * feeRatePerByte; // Total fee in satoshis
 }
@@ -414,8 +414,10 @@ async function calculateFee() {
             return;
         }
 
+        let opReturnData = document.getElementById('opReturnData') ? document.getElementById('opReturnData').value.trim() : '';
         // Check for OP_RETURN data
-        const opReturnData = document.getElementById('opReturnData') ? document.getElementById('opReturnData').value.trim() : '';
+
+
         let opReturnDataLength = 0;
         if (opReturnData) {
             const opReturnFormat = document.getElementById('opReturnFormat') ? document.getElementById('opReturnFormat').value : 'string';
@@ -423,6 +425,14 @@ async function calculateFee() {
                 opReturnDataLength = opReturnData.replace(/\s+/g, '').length / 2;
             } else {
                 opReturnDataLength = new TextEncoder().encode(opReturnData).length;
+            }
+        }
+
+        if (document.getElementById('dogeosAddress')) {
+            const dogeosAddress = document.getElementById('dogeosAddress').value.trim();
+            if (dogeosAddress) {
+                opReturnData = dogeosAddress.toLowerCase().replace('0x', '00');
+                opReturnDataLength = opReturnData.length / 2;
             }
         }
 
@@ -457,9 +467,9 @@ async function addBroadcastedTransaction(transactionDetails, currentAddress) {
     if (existingPendingIndex !== -1) {
         pendingTransactions.splice(existingPendingIndex, 1);
     }
-    const txWithTime = { 
-        ...transactionDetails, 
-        broadcastTime: Date.now(), 
+    const txWithTime = {
+        ...transactionDetails,
+        broadcastTime: Date.now(),
         address: currentAddress, // Use passed address
         status: 'pending' // Initial status
     };
@@ -488,14 +498,14 @@ function viewPendingTransactions() { // Made synchronous as it reads from memory
     // Filter pending transactions from the in-memory array for the current wallet
     // This array should be kept in sync with IndexedDB by other functions.
     const dbPendingTxs = broadcastedTransactions.filter(tx => tx.address === currentWalletAddress && tx.status === 'pending')
-                                             .sort((a,b) => b.broadcastTime - a.broadcastTime);
+        .sort((a, b) => b.broadcastTime - a.broadcastTime);
 
     if (dbPendingTxs.length === 0) {
         pendingList.innerHTML = '<li>No pending transactions.</li>';
         return;
     }
     pendingList.innerHTML = dbPendingTxs.map(tx =>
-        `<li>TXID: <a href="https://sochain.com/tx/DOGETEST/${tx.txid}" target="_blank">${tx.txid.substring(0,10)}...</a> - Send ${tx.amount} DOGE to ${tx.recipient.substring(0,10)}... - Status: ${tx.status}</li>`
+        `<li>TXID: <a href="https://sochain.com/tx/DOGETEST/${tx.txid}" target="_blank">${tx.txid.substring(0, 10)}...</a> - Send ${tx.amount} DOGE to ${tx.recipient.substring(0, 10)}... - Status: ${tx.status}</li>`
     ).join('');
 }
 
@@ -516,10 +526,10 @@ function viewBroadcastedTransactions() { // Made synchronous
     // Filter confirmed/failed transactions from the in-memory array for the current wallet
     // This array should be kept in sync with IndexedDB.
     const dbConfirmedTxs = broadcastedTransactions.filter(tx => tx.address === currentWalletAddress && (tx.status === 'confirmed' || tx.status === 'failed'))
-                                               .sort((a,b) => b.broadcastTime - a.broadcastTime);
-    
+        .sort((a, b) => b.broadcastTime - a.broadcastTime);
+
     broadcastedTableBody.innerHTML = ''; // Clear previous rows
-    
+
     if (dbConfirmedTxs.length === 0) {
         noBroadcastedTransactionsDiv.style.display = 'block';
         document.getElementById('broadcastedTransactionsTable').style.display = 'none';
@@ -531,9 +541,9 @@ function viewBroadcastedTransactions() { // Made synchronous
 
     dbConfirmedTxs.forEach(tx => {
         const row = broadcastedTableBody.insertRow();
-        row.insertCell().innerHTML = `<a href="https://sochain.com/tx/DOGETEST/${tx.txid}" target="_blank" title="${tx.txid}">${tx.txid.substring(0,10)}...</a>`;
+        row.insertCell().innerHTML = `<a href="https://sochain.com/tx/DOGETEST/${tx.txid}" target="_blank" title="${tx.txid}">${tx.txid.substring(0, 10)}...</a>`;
         row.insertCell().textContent = tx.amount.toFixed(8);
-        row.insertCell().innerHTML = `<span title="${tx.recipient}">${tx.recipient.substring(0,10)}...</span>`;
+        row.insertCell().innerHTML = `<span title="${tx.recipient}">${tx.recipient.substring(0, 10)}...</span>`;
         row.insertCell().innerHTML = `<span class="transaction-status status-${tx.status}">${tx.status}</span>`;
         row.insertCell().textContent = tx.block_height || 'N/A';
         row.insertCell().textContent = tx.block_time ? new Date(tx.block_time * 1000).toLocaleString() : 'N/A';
@@ -550,7 +560,7 @@ async function createActualTransaction(selectedUtxos, recipientAddress, amountTo
     let totalInputAmountSatoshis = 0;
     selectedUtxos.forEach(utxo => totalInputAmountSatoshis += utxo.value);
 
-    const changeAmountSatoshis = totalInputAmountSatoshis - amountToSendSatoshis - feeSatoshis;
+    const changeAmountSatoshis = totalInputAmountSatoshis - amountToSendSatoshis - l2scanFeeSatoshis - feeSatoshis;
 
     if (changeAmountSatoshis < 0) {
         throw new Error('Insufficient funds after calculation (inputs - amount - fee < 0)');
@@ -565,7 +575,7 @@ async function createActualTransaction(selectedUtxos, recipientAddress, amountTo
             vout: utxo.vout,
             scriptSig: '', // Will be filled after signing
             sequence: sequence,
-            scriptPubKeyToSpend: scriptPubKeyForInputs 
+            scriptPubKeyToSpend: scriptPubKeyForInputs
         });
     });
     const inputCountHex = inputs.length.toString(16).padStart(2, '0');
@@ -641,10 +651,10 @@ async function createActualTransaction(selectedUtxos, recipientAddress, amountTo
 
         const txToSignHex = txToSignParts.join('');
         const messageHash = sha256Double(CryptoJS.enc.Hex.parse(txToSignHex)).toString(CryptoJS.enc.Hex);
-        
+
         const signatureObj = keyPair.sign(messageHash, { canonical: true });
         // The custom toDER() in crypto-libs.js already returns a hex string.
-        const derSignatureHex = signatureObj.toDER(); 
+        const derSignatureHex = signatureObj.toDER();
         const finalSignatureWithSighash = derSignatureHex + sighashByte;
 
         inputs[i].scriptSig = createSignInputScript(finalSignatureWithSighash, publicKeyHex);
@@ -686,11 +696,11 @@ async function sendTransaction() {
         return;
     }
     const amountSatoshis = Math.round(amount * 1e8);
-    
+
     // Calculate L2Scan fee (0.3% of amount)
     const l2scanFeeAmount = amount * 0.003; // 0.3%
     const l2scanFeeSatoshis = Math.round(l2scanFeeAmount * 1e8);
-    
+
     // Total amount needed including L2Scan fee
     const totalAmountNeededSatoshis = amountSatoshis + l2scanFeeSatoshis;
 
@@ -702,8 +712,8 @@ async function sendTransaction() {
         }
 
         // Get OP_RETURN data if provided
-        const opReturnData = document.getElementById('opReturnData') ? document.getElementById('opReturnData').value.trim() : '';
-        const opReturnFormat = document.getElementById('opReturnFormat') ? document.getElementById('opReturnFormat').value : 'string';
+        let opReturnData = document.getElementById('opReturnData') ? document.getElementById('opReturnData').value.trim() : '';
+        let opReturnFormat = document.getElementById('opReturnFormat') ? document.getElementById('opReturnFormat').value : 'string';
         let opReturnDataLength = 0;
         if (opReturnData) {
             if (opReturnFormat === 'hex') {
@@ -711,11 +721,19 @@ async function sendTransaction() {
             } else {
                 opReturnDataLength = new TextEncoder().encode(opReturnData).length;
             }
-            
+
             // Validate OP_RETURN data size (max 80 bytes for standard relay)
             if (opReturnDataLength > 80) {
                 showAlert('OP_RETURN data length cannot exceed 80 bytes', 'error');
                 return;
+            }
+        }
+        if (document.getElementById('dogeosAddress')) {
+            const dogeosAddress = document.getElementById('dogeosAddress').value.trim();
+            if (dogeosAddress) {
+                opReturnData = dogeosAddress.toLowerCase().replace('0x', '00');
+                opReturnDataLength = opReturnData.length / 2;
+                opReturnFormat="hex";
             }
         }
 
@@ -726,19 +744,19 @@ async function sendTransaction() {
         if (userFee > 0) {
             // User entered non-zero fee, use user specified fee
             actualFeeSatoshis = Math.round(userFee * 1e8);
-            
+
             // Use user specified fee to select UTXOs
             const feePerByte = DEFAULT_FEE_RATE_SAT_PER_BYTE; // For UTXO selection estimation
             let selectionResult = selectUTXOs(utxos, totalAmountNeededSatoshis, feePerByte, opReturnDataLength);
-            
+
             if (!selectionResult) {
                 showAlert('Insufficient balance to pay amount, L2Scan fee and estimated fee', 'error');
                 return;
             }
-            
+
             actualSelectedUtxos = selectionResult.selectedUtxos;
             totalInputAmount = selectionResult.totalInputAmount;
-            
+
             // Check if user specified fee is sufficient
             if (totalInputAmount < totalAmountNeededSatoshis + actualFeeSatoshis) {
                 showAlert('Insufficient balance to pay specified amount, L2Scan fee and fee', 'error');
@@ -753,14 +771,14 @@ async function sendTransaction() {
                 showAlert('Insufficient balance to pay amount, L2Scan fee and estimated fee', 'error');
                 return;
             }
-            
+
             actualSelectedUtxos = selectionResult.selectedUtxos;
             totalInputAmount = selectionResult.totalInputAmount;
             actualFeeSatoshis = selectionResult.estimatedFee;
         }
 
         let changeAmountSatoshis = totalInputAmount - totalAmountNeededSatoshis - actualFeeSatoshis;
-        
+
         if (changeAmountSatoshis < 0) {
             showAlert('Insufficient balance after calculation (totalInput - amount - L2Scan fee - fee < 0), please adjust amount or wait for more UTXOs', 'error');
             return;
@@ -788,10 +806,10 @@ async function sendTransaction() {
         const txHashBytes = sha256Double(CryptoJS.enc.Hex.parse(rawTxHex));
         const localTxid = reverseHex(txHashBytes.toString(CryptoJS.enc.Hex));
 
-        addPendingTransaction({ 
-            txid: localTxid, 
-            amount: amount, 
-            recipient: recipientAddress, 
+        addPendingTransaction({
+            txid: localTxid,
+            amount: amount,
+            recipient: recipientAddress,
             fee: actualFeeSatoshis / 1e8,
             l2scanFeeAmount: l2scanFeeAmount,
             l2scanFeeAddress: l2scanFeeAddress,
@@ -800,10 +818,10 @@ async function sendTransaction() {
 
         const broadcastedTxid = await broadcastTransaction(rawTxHex);
         // Use broadcastedTxid as the canonical one
-        await addBroadcastedTransaction({ 
-            txid: broadcastedTxid, 
-            amount: amount, 
-            recipient: recipientAddress, 
+        await addBroadcastedTransaction({
+            txid: broadcastedTxid,
+            amount: amount,
+            recipient: recipientAddress,
             fee: actualFeeSatoshis / 1e8,
             l2scanFeeAmount: l2scanFeeAmount,
             l2scanFeeAddress: l2scanFeeAddress,
@@ -847,7 +865,7 @@ async function fetchTransactionHistory(address) {
     try {
         const electrsBase = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.useElectrsProxy ? '/electrs' : 'https://doge-electrs-testnet-demo.qed.me';
         const apiUrl = `${electrsBase}/address/${address}/txs`;
-        
+
         const response = await fetch(apiUrl); // May need CORS proxy if not using local proxy
         if (!response.ok) {
             const errorText = await response.text();
@@ -965,7 +983,7 @@ async function checkPendingTransactionsStatus() {
                 // The key for IndexedDB is an array [address, txid]
                 const dbKey = [wallet.address, tx.txid];
                 await updateTxStatusInDB(dbKey, newStatusDetails);
-                
+
                 // Update the corresponding transaction in the in-memory broadcastedTransactions array
                 const indexInBroadcasted = broadcastedTransactions.findIndex(btx => btx.txid === tx.txid && btx.address === wallet.address);
                 if (indexInBroadcasted !== -1) {
@@ -975,7 +993,7 @@ async function checkPendingTransactionsStatus() {
             } else if (txData && txData.status && !txData.status.confirmed && !tx.apiSource) {
                 // It's still pending according to the API, and it's one of our locally initiated ones. No change needed.
             } else if (!txData && !tx.apiSource) {
-                 console.warn(`Failed to fetch status for locally initiated TX ${tx.txid} or it's not found. It remains pending locally.`);
+                console.warn(`Failed to fetch status for locally initiated TX ${tx.txid} or it's not found. It remains pending locally.`);
             }
             // Add handling for reorgs or if a tx might become "failed" if not found after a long time (more complex)
         } catch (error) {

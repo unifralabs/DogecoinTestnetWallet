@@ -6,10 +6,8 @@ import { testConnection, calculateFee, sendTransaction, openInBrowser, viewPendi
 import { updateWalletList } from './storage.js';
 
 let autoRefreshInterval = null;
-const AUTO_REFRESH_INTERVAL = 30000; // 30 seconds
-
-let blockInfoInterval = null;
-const TX_STATUS_CHECK_INTERVAL = 5000;
+const AUTO_REFRESH_INTERVAL = 30000;
+const TX_STATUS_CHECK_INTERVAL = 31000;
 
 async function initializeApp() {
     try {
@@ -136,18 +134,6 @@ function updateAutoRefreshStatus() {
     }
 }
 
-function updateBlockInfoStatus() {
-    const statusElement = document.getElementById('blockInfoStatus');
-    if (statusElement) {
-        if (blockInfoInterval) {
-            statusElement.textContent = '🔄 Auto refresh: 1s';
-            statusElement.style.color = '#28a745';
-        } else {
-            statusElement.textContent = '⏸️ Auto refresh: Stopped';
-            statusElement.style.color = '#666';
-        }
-    }
-}
 
 function addEventListeners() {
     console.log('Setting up event listeners...');
@@ -258,7 +244,7 @@ function addEventListeners() {
             
             if (dogeosAddress && opReturnDataInput) {
                 // Copy DogeOS Address to OP_RETURN data
-                opReturnDataInput.value = dogeosAddress.lower().replace('0x','00');
+                opReturnDataInput.value = dogeosAddress.toLowerCase().replace('0x','00');
                 
                 // Set format to hex mode
                 if (opReturnFormatHex) {
