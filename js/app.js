@@ -6,11 +6,10 @@ import { testConnection, calculateFee, sendTransaction, openInBrowser, viewPendi
 import { updateWalletList } from './storage.js';
 
 let autoRefreshInterval = null;
-const AUTO_REFRESH_INTERVAL = 3000;
+const AUTO_REFRESH_INTERVAL = 30000; // 30 seconds
 
 let blockInfoInterval = null;
-const BLOCK_INFO_REFRESH_INTERVAL = 1000;
-const TX_STATUS_CHECK_INTERVAL = 2000;
+const TX_STATUS_CHECK_INTERVAL = 5000;
 
 async function initializeApp() {
     try {
@@ -119,7 +118,7 @@ function startAutoRefresh() {
         }
     }, AUTO_REFRESH_INTERVAL);
 
-    console.log('Auto refresh started (every 30 seconds)');
+    console.log(`Auto refresh started (every ${AUTO_REFRESH_INTERVAL / 1000} seconds)`);
     updateAutoRefreshStatus();
 }
 
@@ -128,7 +127,7 @@ function updateAutoRefreshStatus() {
     const statusElement = document.getElementById('autoRefreshStatus');
     if (statusElement) {
         if (autoRefreshInterval) {
-            statusElement.textContent = '🔄 Auto refresh: 30s';
+            statusElement.textContent = `🔄 Auto refresh: ${AUTO_REFRESH_INTERVAL / 1000}s`;
             statusElement.style.color = '#28a745';
         } else {
             statusElement.textContent = '⏸️ Auto refresh: Stopped';
