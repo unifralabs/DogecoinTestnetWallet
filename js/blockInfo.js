@@ -24,7 +24,7 @@ const updateBlockInfo = async () => {
     }
 };
 
-setInterval(updateBlockInfo, 20000);
+// setInterval(updateBlockInfo, 20000);
 updateBlockInfo();
 
 export { updateBlockInfo, fetchBlockInfo, fetchLatestBlockHeight };

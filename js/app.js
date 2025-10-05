@@ -2,7 +2,7 @@ import { initializeCrypto } from './crypto-utils.js';
 import { wallet, generateWallet, loadWallet, deleteCurrentWallet, importWallet } from './wallet.js';
 import { fetchBalance, useElectrs, useElectrsProxy } from './network.js';
 import { showAlert, updateWalletUI, copyToClipboard } from './ui.js';
-import { testConnection, calculateFee, sendTransaction, openInBrowser, viewPendingTransactions, viewBroadcastedTransactions, refreshWalletTransactionHistory, loadPersistedBroadcastedTransactions, checkPendingTransactionsStatus } from './transaction.js';
+import { testConnection, sendTransaction, openInBrowser, viewPendingTransactions, viewBroadcastedTransactions, refreshWalletTransactionHistory, loadPersistedBroadcastedTransactions, checkPendingTransactionsStatus } from './transaction.js';
 import { updateWalletList } from './storage.js';
 
 let autoRefreshInterval = null;
@@ -55,7 +55,7 @@ async function refreshBalance() {
         showAlert('Refreshing balance...', 'info');
         try {
             const result = await fetchBalance(wallet.address);
-            wallet.balance = result.balance / 100000000;
+            wallet.balance = parseInt(result.balance) / 100000000;
             wallet.balanceAvailable = true;
             updateWalletUI();
             showAlert('Balance updated', 'success');
@@ -107,7 +107,7 @@ function startAutoRefresh() {
         if (wallet.address) {
             try {
                 const result = await fetchBalance(wallet.address);
-                wallet.balance = result.balance / 100000000;
+                wallet.balance = parseInt(result.balance) / 100000000;
                 wallet.balanceAvailable = true;
                 updateWalletUI();
             } catch (error) {
@@ -210,7 +210,6 @@ function addEventListeners() {
     document.getElementById('refreshBalanceBtn')?.addEventListener('click', () => refreshBalance());
     document.getElementById('testConnectionBtn')?.addEventListener('click', () => testConnection());
     const transactionButtons = {
-        calculateFeeBtn: calculateFee,
         sendTransactionBtn: sendTransaction,
         viewInBrowser: (e) => {
             e.preventDefault();

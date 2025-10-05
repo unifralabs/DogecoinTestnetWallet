@@ -247,7 +247,7 @@
     function signatureToDER(signature) {
         const { r, s } = signature;
         
-        console.log('DER encoding signature:', { r: r.toString(16), s: s.toString(16) });
+        //console.log('DER encoding signature:', { r: r.toString(16), s: s.toString(16) });
         
         // Convert r and s to byte arrays
         let rBytes = r.toString(16);
@@ -262,8 +262,8 @@
             sBytes = '00' + sBytes;
         }
         
-        console.log('DER r bytes:', rBytes, 'length:', rBytes.length / 2);
-        console.log('DER s bytes:', sBytes, 'length:', sBytes.length / 2);
+        // console.log('DER r bytes:', rBytes, 'length:', rBytes.length / 2);
+        // console.log('DER s bytes:', sBytes, 'length:', sBytes.length / 2);
         
         // Build DER encoding
         const rLength = (rBytes.length / 2).toString(16).padStart(2, '0');
@@ -271,7 +271,7 @@
         const totalLength = (2 + rBytes.length / 2 + 2 + sBytes.length / 2).toString(16).padStart(2, '0');
         
         const derSignature = '30' + totalLength + '02' + rLength + rBytes + '02' + sLength + sBytes;
-        console.log('Final DER signature:', derSignature, 'length:', derSignature.length / 2);
+        //console.log('Final DER signature:', derSignature, 'length:', derSignature.length / 2);
         
         return derSignature;
     }

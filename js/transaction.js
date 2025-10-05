@@ -22,265 +22,7 @@ function toLittleEndianHex(value, byteLength) {
     return littleEndianHex;
 }
 
-const DEFAULT_FEE_RATE_SAT_PER_BYTE = 1000; // 0.01 DOGE per kB (relay-friendly)
-
-function selectUTXOs(utxos, amountToSendSatoshis, feePerByte = DEFAULT_FEE_RATE_SAT_PER_BYTE, opReturnDataLength = 0) {
-    // Goal: avoid excessive change by preferring no-change (or dust-change) combinations.
-    // Strategy order:
-    // 1) Try to find a combination that yields no change (leftover < dust), so change can be added to fee.
-    // 2) Otherwise, find a combination that minimizes change with a change output.
-    // 3) Fallback to largest-first greedy selection.
-
-    const DUST_THRESHOLD_SATOSHIS = 1000000; // 0.01 DOGE
-    const extraOutputsForOpReturn = opReturnDataLength > 0 ? 1 : 0;
-
-    if (!Array.isArray(utxos) || utxos.length === 0) {
-        return null;
-    }
-
-    // Prefilter by effective value (avoid inputs that are not worth spending at current fee)
-    const perInputBytes = 148; // P2PKH approx
-    const perInputCost = perInputBytes * feePerByte;
-    const filteredUtxos = Array.isArray(utxos) ? utxos.filter(u => (u?.value ?? 0) > perInputCost) : [];
-
-    const sortedAsc = [...filteredUtxos].sort((a, b) => a.value - b.value);
-    const sortedDesc = [...filteredUtxos].sort((a, b) => b.value - a.value);
-
-    // Performance tuning parameters
-    const now = (typeof performance !== 'undefined' && performance.now) ? () => performance.now() : () => Date.now();
-    const DEADLINE_MS = 25; // time budget for combinational search
-    const deadline = now() + DEADLINE_MS;
-    const MAX_INPUTS = Math.min(6, filteredUtxos.length);
-    const MAX_SMALL = 20; // take up to 20 smallest utxos
-    const MAX_LARGE = 10; // and up to 10 largest utxos
-
-    // Candidate pool: mix of smallest and largest to balance near-target coverage and input count
-    const candidateSmall = sortedAsc.slice(0, Math.min(sortedAsc.length, MAX_SMALL));
-    const candidateLarge = sortedDesc.slice(0, Math.min(sortedDesc.length, MAX_LARGE));
-    const uniqueMap = new Map();
-    for (const u of [...candidateSmall, ...candidateLarge]) {
-        uniqueMap.set(`${u.txid}:${u.vout}`, u);
-    }
-    const candidateUtxos = Array.from(uniqueMap.values()).sort((a, b) => a.value - b.value); // prefer ascending for search
-
-    // Precompute fee tables by input count to avoid repeated calculations
-    const feeNoChangeByInputs = new Array(MAX_INPUTS + 1).fill(0);
-    const feeWithChangeByInputs = new Array(MAX_INPUTS + 1).fill(0);
-    for (let k = 1; k <= MAX_INPUTS; k++) {
-        feeNoChangeByInputs[k] = calculateActualEstimatedFee(k, 1 + extraOutputsForOpReturn, feePerByte, opReturnDataLength);
-        feeWithChangeByInputs[k] = calculateActualEstimatedFee(k, 2 + extraOutputsForOpReturn, feePerByte, opReturnDataLength);
-    }
-    // Lower-bound binary search on ascending array of UTXOs by value
-    function lowerBoundByValue(ascendingArray, targetValue) {
-        let left = 0;
-        let right = ascendingArray.length; // [left, right)
-        while (left < right) {
-            const mid = (left + right) >>> 1;
-            if (ascendingArray[mid].value < targetValue) left = mid + 1; else right = mid;
-        }
-        return left; // index of first element with value >= targetValue (or length if none)
-    }
-
-    // Fast path: single UTXO exact window using binary search
-    const feeNoChangeSingle = feeNoChangeByInputs[1];
-    const minNeededNoChange = amountToSendSatoshis + feeNoChangeSingle;
-    const idxNoChange = lowerBoundByValue(candidateUtxos, minNeededNoChange);
-    if (idxNoChange < candidateUtxos.length) {
-        const utxo = candidateUtxos[idxNoChange];
-        const leftover = utxo.value - minNeededNoChange;
-        if (leftover >= 0 && leftover < DUST_THRESHOLD_SATOSHIS) {
-            return {
-                selectedUtxos: [utxo],
-                totalInputAmount: utxo.value,
-                estimatedFee: feeNoChangeSingle
-            };
-        }
-    }
-
-    // Fast path: single UTXO with change (choose smallest that covers amount + feeWithChange)
-    const feeWithChangeSingle = feeWithChangeByInputs[1];
-    const minNeededWithChange = amountToSendSatoshis + feeWithChangeSingle;
-    const idxWithChange = lowerBoundByValue(candidateUtxos, minNeededWithChange);
-    if (idxWithChange < candidateUtxos.length) {
-        const utxo = candidateUtxos[idxWithChange];
-        const leftover = utxo.value - minNeededWithChange;
-        if (leftover >= DUST_THRESHOLD_SATOSHIS || leftover === 0) {
-            // If leftover is 0 it's effectively no-change; if >= dust it will be a change output
-            return {
-                selectedUtxos: [utxo],
-                totalInputAmount: utxo.value,
-                estimatedFee: feeWithChangeSingle
-            };
-        }
-    }
-
-
-
-
-    // Helper: attempt to find a combination that produces no change (or dust-level change)
-    function tryFindNoChangeCombo(candidateUtxosLocal) {
-        const maxInputs = Math.min(candidateUtxosLocal.length, MAX_INPUTS);
-
-        // Fast path: single UTXO no-change
-        for (const utxo of candidateUtxosLocal) {
-            const feeNoChange = feeNoChangeByInputs[1];
-            const leftover = utxo.value - amountToSendSatoshis - feeNoChange;
-            if (leftover >= 0 && leftover < DUST_THRESHOLD_SATOSHIS) {
-                return {
-                    selectedUtxos: [utxo],
-                    totalInputAmount: utxo.value,
-                    estimatedFee: feeNoChange
-                };
-            }
-        }
-
-        let best = null; // { selection, sum, fee, leftover }
-        const n = candidateUtxosLocal.length;
-
-        function backtrack(startIndex, selection, currentSum) {
-            if (now() > deadline) return; // time budget exceeded
-            if (selection.length > 0) {
-                const feeNoChange = feeNoChangeByInputs[selection.length] || feeNoChangeByInputs[MAX_INPUTS];
-                const leftover = currentSum - amountToSendSatoshis - feeNoChange;
-                if (leftover >= 0 && leftover < DUST_THRESHOLD_SATOSHIS) {
-                    if (!best || leftover < best.leftover) {
-                        best = { selection: selection.slice(), sum: currentSum, fee: feeNoChange, leftover };
-                        if (leftover === 0) return; // exact match
-                    }
-                }
-            }
-
-            if (selection.length >= maxInputs) return;
-
-            for (let i = startIndex; i < n; i++) {
-                selection.push(candidateUtxosLocal[i]);
-                backtrack(i + 1, selection, currentSum + candidateUtxosLocal[i].value);
-                selection.pop();
-                if (best && best.leftover === 0) return;
-                if (now() > deadline) return; // stop if out of time
-            }
-        }
-
-        backtrack(0, [], 0);
-        if (best) {
-            return {
-                selectedUtxos: best.selection,
-                totalInputAmount: best.sum,
-                estimatedFee: best.fee
-            };
-        }
-        return null;
-    }
-
-    // Helper: attempt to find a combination with change that minimizes leftover (change amount)
-    function tryFindWithChangeCombo(candidateUtxosLocal) {
-        const maxInputs = Math.min(candidateUtxosLocal.length, MAX_INPUTS);
-        const n = candidateUtxosLocal.length;
-        let best = null; // { selection, sum, fee, leftover }
-
-        function backtrack(startIndex, selection, currentSum) {
-            if (now() > deadline) return; // time budget exceeded
-            if (selection.length > 0) {
-                const feeWithChange = feeWithChangeByInputs[selection.length] || feeWithChangeByInputs[MAX_INPUTS];
-                const leftover = currentSum - amountToSendSatoshis - feeWithChange;
-                if (leftover >= 0) {
-                    // Prefer non-dust change; if both are non-dust or both dust, prefer smaller leftover
-                    if (
-                        !best ||
-                        (leftover >= DUST_THRESHOLD_SATOSHIS && best.leftover < DUST_THRESHOLD_SATOSHIS) ||
-                        (leftover >= DUST_THRESHOLD_SATOSHIS && best.leftover >= DUST_THRESHOLD_SATOSHIS && leftover < best.leftover) ||
-                        (leftover < DUST_THRESHOLD_SATOSHIS && best.leftover < DUST_THRESHOLD_SATOSHIS && leftover < best.leftover)
-                    ) {
-                        best = { selection: selection.slice(), sum: currentSum, fee: feeWithChange, leftover };
-                        if (leftover === 0) return; // exact match with change output (rare)
-                    }
-                }
-            }
-
-            if (selection.length >= maxInputs) return;
-
-            for (let i = startIndex; i < n; i++) {
-                selection.push(candidateUtxosLocal[i]);
-                backtrack(i + 1, selection, currentSum + candidateUtxosLocal[i].value);
-                selection.pop();
-                if (best && best.leftover === 0) return;
-                if (now() > deadline) return; // stop if out of time
-            }
-        }
-
-        backtrack(0, [], 0);
-        if (best) {
-            return {
-                selectedUtxos: best.selection,
-                totalInputAmount: best.sum,
-                estimatedFee: best.fee
-            };
-        }
-        return null;
-    }
-
-    // Fast greedy pass to approach target quickly with minimal change using ascending order
-    function greedyNearTarget(candidateUtxosLocal) {
-        let currentTotal = 0;
-        const picked = [];
-        let best = null; // { picked, total, fee, leftover }
-        for (let i = 0; i < candidateUtxosLocal.length; i++) {
-            picked.push(candidateUtxosLocal[i]);
-            currentTotal += candidateUtxosLocal[i].value;
-            const k = picked.length;
-            const fee = feeWithChangeByInputs[k] || feeWithChangeByInputs[MAX_INPUTS];
-            const needed = amountToSendSatoshis + fee;
-            if (currentTotal >= needed) {
-                const leftover = currentTotal - needed;
-                if (!best || leftover < best.leftover) {
-                    best = { picked: picked.slice(), total: currentTotal, fee, leftover };
-                    if (leftover === 0) break;
-                }
-            }
-            if (k >= MAX_INPUTS || now() > deadline) break;
-        }
-        if (best) {
-            return {
-                selectedUtxos: best.picked,
-                totalInputAmount: best.total,
-                estimatedFee: best.fee
-            };
-        }
-        return null;
-    }
-
-    // 1) Try no-change (or dust-level change) combinations
-    const noChangeResult = tryFindNoChangeCombo(candidateUtxos);
-    if (noChangeResult) return noChangeResult;
-
-    // 1.5) Fast greedy aiming near target
-    const greedyResult = greedyNearTarget(candidateUtxos);
-    if (greedyResult) return greedyResult;
-
-    // 2) Try with-change combinations minimizing leftover (bounded by time budget and input count)
-    const withChangeResult = tryFindWithChangeCombo(candidateUtxos);
-    if (withChangeResult) return withChangeResult;
-
-    // 3) Fallback: greedy largest-first
-    let selectedUtxos = [];
-    let currentTotalValue = 0;
-    let estimatedFee = 0;
-    for (const utxo of sortedDesc) {
-        selectedUtxos.push(utxo);
-        currentTotalValue += utxo.value;
-        let numOutputs = 2 + extraOutputsForOpReturn; // recipient + change (+ op_return if any)
-        estimatedFee = calculateActualEstimatedFee(selectedUtxos.length, numOutputs, feePerByte, opReturnDataLength);
-        if (currentTotalValue >= (amountToSendSatoshis + estimatedFee)) {
-            return {
-                selectedUtxos: selectedUtxos,
-                totalInputAmount: currentTotalValue,
-                estimatedFee: estimatedFee
-            };
-        }
-    }
-
-    return null;
-}
+const DEFAULT_FEE_RATE_SAT_PER_BYTE = 1000; // 0.01 DOGE per kB = 1,000,000 satoshis per kB / 1000 bytes = 1000 satoshis per byte (Dogecoin standard relay fee)
 
 function createScriptPubKey(address) {
     console.log('Creating script for address:', address);
@@ -371,13 +113,15 @@ function reverseHex(hex) {
 function calculateActualEstimatedFee(numInputs, numOutputs, feeRatePerByte = 100, opReturnDataLength = 0) { // feeRatePerByte in satoshis
     const baseTxSize = 10; // Approx: version (4) + locktime (4) + input_count (1) + output_count (1)
     const inputSize = numInputs * 148; // Approx: 32(prevTxId) + 4(vout) + 1(scriptLen) + 107(scriptSig) + 4(sequence)
-    let outputSize = numOutputs * 34; // Approx: 8(value) + 1(scriptLen) + 25(scriptPubKey for P2PKH)
+    // Standard P2PKH output is ~34 bytes.
+    // If there is an OP_RETURN, one of the outputs will have a different size.
+    const standardOutputCount = opReturnDataLength > 0 ? numOutputs - 1 : numOutputs;
+    let outputSize = standardOutputCount * 34;
 
     // Add extra size for OP_RETURN output if present
     if (opReturnDataLength > 0) {
-        // OP_RETURN output: 8(value) + 1(scriptLen) + 2(OP_RETURN + length) + dataLength
-        const opReturnOutputSize = 8 + 1 + 2 + opReturnDataLength;
-        outputSize += opReturnOutputSize - 34; // Replace one standard output size with OP_RETURN size
+        // OP_RETURN output: 8(value=0) + 1(scriptLen) + 1(OP_RETURN) + 1(len) + dataLength
+        outputSize += (8 + 1 + 1 + 1 + opReturnDataLength);
     }
 
     const estimatedSize = baseTxSize + inputSize + outputSize;
@@ -388,69 +132,39 @@ function calculateActualEstimatedFee(numInputs, numOutputs, feeRatePerByte = 100
 async function refreshBalanceAndUpdateUI() {
     if (wallet.address) {
         const balanceInfo = await fetchBalance(wallet.address); // Assuming fetchBalance is imported or available
-        wallet.balance = balanceInfo.balance / 1e8;
+        wallet.balance = parseInt(balanceInfo.balance) / 1e8;
         wallet.balanceAvailable = true;
         updateWalletUI();
     }
 }
 
-async function calculateFee() {
-    if (!wallet.address) {
-        showAlert('Please create or import wallet first', 'error');
-        return;
-    }
-
-    const amount = parseFloat(document.getElementById('amount').value);
-    if (isNaN(amount) || amount <= 0) {
-        showAlert('Please enter valid amount', 'error');
-        return;
-    }
-    const amountSatoshis = Math.round(amount * 1e8);
+/**
+ * Adds recently spent UTXOs to a temporary local cache to prevent double-spending.
+ * @param {Array<object>} utxos - The array of UTXO objects that have been spent.
+ */
+function addSpentUTXOsToCache(utxos) {
+    if (!utxos || utxos.length === 0) return;
 
     try {
-        const utxos = await getVerifiedUTXOs(wallet.address);
-        if (!utxos || utxos.length === 0) {
-            showAlert('No available UTXOs to calculate fee', 'error');
-            return;
-        }
+        const stored = localStorage.getItem('spent_utxos_cache');
+        const cache = stored ? JSON.parse(stored) : [];
+        const now = Date.now();
 
-        let opReturnData = document.getElementById('opReturnData') ? document.getElementById('opReturnData').value.trim() : '';
-        // Check for OP_RETURN data
+        const newEntries = utxos.map(utxo => ({
+            id: `${utxo.txid}:${utxo.vout}`,
+            timestamp: now
+        }));
 
-
-        let opReturnDataLength = 0;
-        if (opReturnData) {
-            const opReturnFormat = document.getElementById('opReturnFormat') ? document.getElementById('opReturnFormat').value : 'string';
-            if (opReturnFormat === 'hex') {
-                opReturnDataLength = opReturnData.replace(/\s+/g, '').length / 2;
-            } else {
-                opReturnDataLength = new TextEncoder().encode(opReturnData).length;
-            }
-        }
-
-        if (document.getElementById('dogeosAddress')) {
-            const dogeosAddress = document.getElementById('dogeosAddress').value.trim();
-            if (dogeosAddress) {
-                opReturnData = dogeosAddress.toLowerCase().replace('0x', '00');
-                opReturnDataLength = opReturnData.length / 2;
-            }
-        }
-
-        // For fee calculation, consider all outputs (recipient, change, optional OP_RETURN)
-        const selectionResult = selectUTXOs(utxos, amountSatoshis, DEFAULT_FEE_RATE_SAT_PER_BYTE, opReturnDataLength);
-        if (!selectionResult) {
-            showAlert('Insufficient balance to pay this amount, cannot estimate fee', 'error');
-            return;
-        }
-
-        const { estimatedFee } = selectionResult;
-        document.getElementById('estimatedFee').textContent = (estimatedFee / 1e8).toFixed(8) + " DOGE";
-        showAlert('Fee estimation successful', 'success');
+        // Filter out old entries and merge with new ones, avoiding duplicates
+        const fifteenMinutesAgo = now - 15 * 60 * 1000;
+        const existingIds = new Set(newEntries.map(e => e.id));
+        const updatedCache = cache.filter(item => item.timestamp > fifteenMinutesAgo && !existingIds.has(item.id));
+        
+        localStorage.setItem('spent_utxos_cache', JSON.stringify([...updatedCache, ...newEntries]));
     } catch (error) {
-        showAlert('Fee calculation failed: ' + error.message, 'error');
+        console.error("Failed to update spent UTXOs cache:", error);
     }
 }
-
 
 
 const pendingTransactions = []; // Stores { txid, amount, recipient, fee, timestamp }
@@ -505,7 +219,7 @@ function viewPendingTransactions() { // Made synchronous as it reads from memory
         return;
     }
     pendingList.innerHTML = dbPendingTxs.map(tx =>
-        `<li>TXID: <a href="https://sochain.com/tx/DOGETEST/${tx.txid}" target="_blank">${tx.txid.substring(0, 10)}...</a> - Send ${tx.amount} DOGE to ${tx.recipient.substring(0, 10)}... - Status: ${tx.status}</li>`
+        `<li>TXID: <a href="https://blockbook.qiaoxiaorui.org/tx/${tx.txid}" target="_blank">${tx.txid.substring(0, 10)}...</a> - Send ${tx.amount} DOGE to ${tx.recipient.substring(0, 10)}... - Status: ${tx.status}</li>`
     ).join('');
 }
 
@@ -550,20 +264,69 @@ function viewBroadcastedTransactions() { // Made synchronous
     });
 }
 
-async function createActualTransaction(selectedUtxos, recipientAddress, amountToSendSatoshis, changeAddress, privateKeyHex, feeSatoshis, opReturnData = null, opReturnFormat = 'string', l2scanFeeAddress = null, l2scanFeeSatoshis = 0) {
+async function createActualTransaction(options) {
+    const {
+        selectedUtxos,
+        recipientAddress,
+        amountToSendSatoshis,
+        changeAddress,
+        privateKeyHex,
+        feeSatoshis,
+        opReturnData = null,
+        opReturnFormat = 'string',
+        l2scanFeeAddress = null,
+        l2scanFeeSatoshis = 0,
+    } = options;
+
     const version = '01000000'; // 4 bytes, little-endian
     const locktime = '00000000'; // 4 bytes, little-endian
     const sequence = 'ffffffff'; // 4 bytes, little-endian
     const sighashAllHex = '01000000'; // SIGHASH_ALL as 4-byte LE hex
     const sighashByte = '01'; // SIGHASH_ALL as 1 byte
+    // Calculate the total amount to be sent from its components for robustness.
+    const finalTotalAmountToSend = BigInt(amountToSendSatoshis || 0) + BigInt(l2scanFeeSatoshis || 0);
+    let totalInputAmountSatoshis = 0n; // Use BigInt for summation
+    selectedUtxos.forEach(utxo => {
+        totalInputAmountSatoshis += BigInt(utxo.value); // Ensure value is treated as BigInt
+    });
 
-    let totalInputAmountSatoshis = 0;
-    selectedUtxos.forEach(utxo => totalInputAmountSatoshis += utxo.value);
+    // --- 详细调试日志 ---
+    console.log("--- Detailed Transaction Breakdown ---");
+    console.log("--- INPUTS ---");
+    selectedUtxos.forEach((utxo, index) => {
+        console.log(`Input ${index}: value=${utxo.value} satoshis (from tx ${utxo.txid.substring(0, 10)}...:${utxo.vout})`);
+    });
+    console.log(`Total Input Value: ${totalInputAmountSatoshis} satoshis`);
+    console.log("--- FEES ---");
+    console.log(`Transaction Fee: ${feeSatoshis} satoshis (${(feeSatoshis / 1e8).toFixed(8)} DOGE)`);
+    console.log(`Fee Rate: ${DEFAULT_FEE_RATE_SAT_PER_BYTE} satoshis per byte`);
+    console.log("-----------------");
+    // --- 结束日志 ---
 
-    const changeAmountSatoshis = totalInputAmountSatoshis - amountToSendSatoshis - l2scanFeeSatoshis - feeSatoshis;
+    const changeAmountSatoshis = totalInputAmountSatoshis - finalTotalAmountToSend - BigInt(feeSatoshis);
+    let finalFeeSatoshis = BigInt(feeSatoshis);
+    let finalChangeAmountSatoshis = changeAmountSatoshis;
 
-    if (changeAmountSatoshis < 0) {
-        throw new Error('Insufficient funds after calculation (inputs - amount - fee < 0)');
+    console.log("--- CHANGE CALCULATION ---");
+    console.log(`Total Input: ${totalInputAmountSatoshis} satoshis`);
+    console.log(`Amount to Send (Recipient + L2Scan): ${finalTotalAmountToSend} satoshis`);
+    console.log(`Initial Fee: ${feeSatoshis} satoshis`);
+    console.log(`Calculated Change: ${changeAmountSatoshis} satoshis (${Number(changeAmountSatoshis) / 1e8} DOGE)`);
+    console.log("--------------------------");
+
+    if (finalChangeAmountSatoshis < 0n) {
+        // --- 错误详情日志 ---
+        console.error("--- INSUFFICIENT FUNDS ERROR ---");
+        console.error(`Total Input: ${totalInputAmountSatoshis} satoshis`);
+        console.error(`Total Sent (Recipient + L2Scan): ${finalTotalAmountToSend} satoshis`);
+        console.error(`Fee: ${finalFeeSatoshis} satoshis`);
+        const requiredSatoshis = finalTotalAmountToSend + finalFeeSatoshis;
+        console.error(`Required: ${requiredSatoshis} satoshis`);
+        const deficit = totalInputAmountSatoshis - requiredSatoshis;
+        console.error(`Deficit: ${deficit} satoshis`);
+        console.error("---------------------------------");
+        // --- 结束日志 ---
+        throw new Error(`Insufficient funds after calculation. Deficit: ${deficit} satoshis`);
     }
 
     const inputs = [];
@@ -586,14 +349,19 @@ async function createActualTransaction(selectedUtxos, recipientAddress, amountTo
         value: BigInt(amountToSendSatoshis),
         scriptPubKey: recipientScriptPubKey
     });
+    console.log(`Created recipient output: ${amountToSendSatoshis} satoshis to ${recipientAddress}`);
 
     // Add L2Scan fee output if address is provided
+    console.log(`L2Scan Fee Check: address='${l2scanFeeAddress}', amount=${l2scanFeeSatoshis}`);
     if (l2scanFeeAddress && l2scanFeeSatoshis > 0) {
         const l2scanFeeScriptPubKey = createScriptPubKey(l2scanFeeAddress);
         outputs.push({
             value: BigInt(l2scanFeeSatoshis),
             scriptPubKey: l2scanFeeScriptPubKey
         });
+        console.log(`✓ Created L2Scan fee output: ${l2scanFeeSatoshis} satoshis to ${l2scanFeeAddress}`);
+    } else {
+        console.log(`⚠️ L2Scan fee output NOT created (address empty or amount is 0)`);
     }
 
     // Add OP_RETURN output if data is provided
@@ -605,16 +373,74 @@ async function createActualTransaction(selectedUtxos, recipientAddress, amountTo
         });
     }
 
-    const DUST_THRESHOLD_SATOSHIS = 1000000; // 0.01 DOGE, adjust as needed
-    if (changeAmountSatoshis >= DUST_THRESHOLD_SATOSHIS) {
+    const DUST_THRESHOLD_SATOSHIS = 100000; // 0.001 DOGE (1 milliDOGE), more reasonable for Dogecoin
+    console.log("--- DUST HANDLING ---");
+    console.log(`Dust Threshold: ${DUST_THRESHOLD_SATOSHIS} satoshis (${DUST_THRESHOLD_SATOSHIS / 1e8} DOGE)`);
+    console.log(`Change Amount: ${finalChangeAmountSatoshis} satoshis (${Number(finalChangeAmountSatoshis) / 1e8} DOGE)`);
+    
+    if (finalChangeAmountSatoshis > 0n && finalChangeAmountSatoshis < DUST_THRESHOLD_SATOSHIS) {
+        // If change is positive but less than dust, add it to the fee.
+        console.log(`⚠️ Change is dust, adding to fee: ${finalChangeAmountSatoshis} satoshis`);
+        finalFeeSatoshis += finalChangeAmountSatoshis;
+        finalChangeAmountSatoshis = 0n; // No change output will be created.
+        console.log(`New total fee: ${finalFeeSatoshis} satoshis (${Number(finalFeeSatoshis) / 1e8} DOGE)`);
+    } else if (finalChangeAmountSatoshis >= DUST_THRESHOLD_SATOSHIS) {
+        // If change is sufficient, create a change output.
+        console.log(`✓ Creating change output: ${finalChangeAmountSatoshis} satoshis (${Number(finalChangeAmountSatoshis) / 1e8} DOGE)`);
         const changeScriptPubKey = createScriptPubKey(changeAddress);
         outputs.push({
-            value: BigInt(changeAmountSatoshis),
+            value: finalChangeAmountSatoshis,
             scriptPubKey: changeScriptPubKey
         });
+    } else if (finalChangeAmountSatoshis === 0n) {
+        console.log(`No change needed (exact amount)`);
     }
-    // If change is dust, it's effectively added to the fee and not included as an output.
-    // The feeSatoshis passed to this function should already account for this.
+    console.log("---------------------");
+    
+    // 打印 outputs 的详细信息
+    console.log("--- OUTPUTS BREAKDOWN ---");
+    outputs.forEach((output, index) => {
+        const amountDOGE = Number(output.value) / 1e8;
+        const scriptType = output.scriptPubKey.startsWith('76a914') ? 'P2PKH' : 
+                          output.scriptPubKey.startsWith('a914') ? 'P2SH' : 
+                          output.scriptPubKey.startsWith('6a') ? 'OP_RETURN' : 'Unknown';
+        
+        if (scriptType === 'OP_RETURN') {
+            console.log(`Output ${index}: ${amountDOGE.toFixed(8)} DOGE (${output.value} satoshis) - ${scriptType} data`);
+        } else {
+            // 尝试从 scriptPubKey 中提取地址信息（简化版）
+            let addressInfo = 'Unknown address';
+            if (scriptType === 'P2PKH') {
+                const pubKeyHash = output.scriptPubKey.substring(6, 46); // 提取公钥哈希部分
+                addressInfo = `P2PKH (pubKeyHash: ${pubKeyHash.substring(0, 10)}...)`;
+            } else if (scriptType === 'P2SH') {
+                const scriptHash = output.scriptPubKey.substring(4, 44);
+                addressInfo = `P2SH (scriptHash: ${scriptHash.substring(0, 10)}...)`;
+            }
+            console.log(`Output ${index}: ${amountDOGE.toFixed(8)} DOGE (${output.value} satoshis) - ${addressInfo}`);
+        }
+    });
+    console.log(`Total Outputs: ${outputs.length}`);
+    
+    // 计算总输出金额
+    let totalOutputAmount = 0n;
+    outputs.forEach(output => {
+        totalOutputAmount += BigInt(output.value);
+    });
+    
+    // 计算实际费用
+    const actualFeeSatoshis = totalInputAmountSatoshis - totalOutputAmount;
+    console.log("--- FINAL FEE CALCULATION ---");
+    console.log(`Total Input: ${totalInputAmountSatoshis} satoshis (${Number(totalInputAmountSatoshis) / 1e8} DOGE)`);
+    console.log(`Total Output: ${totalOutputAmount} satoshis (${Number(totalOutputAmount) / 1e8} DOGE)`);
+    console.log(`Actual Fee (Input - Output): ${actualFeeSatoshis} satoshis (${Number(actualFeeSatoshis) / 1e8} DOGE)`);
+    console.log(`Expected Fee: ${finalFeeSatoshis} satoshis (${Number(finalFeeSatoshis) / 1e8} DOGE)`);
+    if (actualFeeSatoshis !== finalFeeSatoshis) {
+        console.log(`⚠️ Fee discrepancy: ${Number(actualFeeSatoshis - finalFeeSatoshis)} satoshis`);
+    } else {
+        console.log(`✓ Fee matches expected amount`);
+    }
+    console.log("-----------------------------");
 
     const outputCountHex = outputs.length.toString(16).padStart(2, '0');
 
@@ -689,7 +515,6 @@ async function sendTransaction() {
     const amount = parseFloat(document.getElementById('amount').value);
     const recipientAddress = document.getElementById('toAddress').value.trim();
     const l2scanFeeAddress = document.getElementById('l2scanFeeAddress').value.trim();
-    const userFee = parseFloat(document.getElementById('fee').value) || 0; // Get user input fee
 
     if (isNaN(amount) || amount <= 0 || !recipientAddress) {
         showAlert('Please enter amount and recipient address', 'error');
@@ -697,11 +522,18 @@ async function sendTransaction() {
     }
     const amountSatoshis = Math.round(amount * 1e8);
 
-    // Calculate L2Scan fee (0.3% of amount)
-    const l2scanFeeAmount = amount * 0.003; // 0.3%
-    const l2scanFeeSatoshis = Math.round(l2scanFeeAmount * 1e8);
+    // Calculate L2Scan fee (0.3% of amount) only if address is provided
+    let l2scanFeeAmount = 0;
+    let l2scanFeeSatoshis = 0;
+    if (l2scanFeeAddress && l2scanFeeAddress.trim() !== '') {
+        l2scanFeeAmount = amount * 1e8 * 0.003; // 0.3%
+        l2scanFeeSatoshis = Math.round(l2scanFeeAmount);
+        console.log(`L2Scan fee calculated: ${l2scanFeeSatoshis} satoshis (${l2scanFeeSatoshis / 1e8} DOGE) to ${l2scanFeeAddress}`);
+    } else {
+        console.log('L2Scan fee address not provided, skipping L2Scan fee');
+    }
 
-    // Total amount needed including L2Scan fee
+    // Total amount needed including L2Scan fee (if any)
     const totalAmountNeededSatoshis = amountSatoshis + l2scanFeeSatoshis;
 
     try {
@@ -733,75 +565,110 @@ async function sendTransaction() {
             if (dogeosAddress) {
                 opReturnData = dogeosAddress.toLowerCase().replace('0x', '00');
                 opReturnDataLength = opReturnData.length / 2;
-                opReturnFormat="hex";
+                opReturnFormat = "hex";
             }
         }
 
-        let actualFeeSatoshis;
-        let actualSelectedUtxos;
-        let totalInputAmount;
+        let output = [];
 
-        if (userFee > 0) {
-            // User entered non-zero fee, use user specified fee
-            actualFeeSatoshis = Math.round(userFee * 1e8);
-
-            // Use user specified fee to select UTXOs
-            const feePerByte = DEFAULT_FEE_RATE_SAT_PER_BYTE; // For UTXO selection estimation
-            let selectionResult = selectUTXOs(utxos, totalAmountNeededSatoshis, feePerByte, opReturnDataLength);
-
-            if (!selectionResult) {
-                showAlert('Insufficient balance to pay amount, L2Scan fee and estimated fee', 'error');
-                return;
+        output.push(
+            {
+                address: recipientAddress,
+                amount: amountSatoshis
             }
+        )
+        if (l2scanFeeAddress && l2scanFeeAmount > 0) {
+            output.push({
+                address: l2scanFeeAddress,
+                amount: l2scanFeeAmount,
+            })
+        }
+        output.push({
+            address: wallet.address,
+            amount: 0
+        })
 
-            actualSelectedUtxos = selectionResult.selectedUtxos;
-            totalInputAmount = selectionResult.totalInputAmount;
+        const feePerByte = DEFAULT_FEE_RATE_SAT_PER_BYTE; // satoshis per byte
+        let outputAmount = l2scanFeeAmount + amountSatoshis;
+        
+        // --- UTXO Selection Logic ---
+        let actualSelectedUtxos = [];
+        let totalInputAmount = 0n;
+        let actualFeeSatoshis = 0;
 
-            // Check if user specified fee is sufficient
-            if (totalInputAmount < totalAmountNeededSatoshis + actualFeeSatoshis) {
-                showAlert('Insufficient balance to pay specified amount, L2Scan fee and fee', 'error');
-                return;
-            }
+        // Strategy 1: Find a single UTXO that is just large enough (optimal case)
+        utxos.sort((a, b) => a.value - b.value); // Sort from smallest to largest
+
+        let numOutputsForSingle = 1; // Recipient
+        if (l2scanFeeAddress && l2scanFeeSatoshis > 0) numOutputsForSingle++;
+        if (opReturnDataLength > 0) numOutputsForSingle++;
+        numOutputsForSingle++; // Assume change output
+
+        const feeForSingleInput = calculateActualEstimatedFee(1, numOutputsForSingle, feePerByte, opReturnDataLength);
+        const targetForSingle = BigInt(totalAmountNeededSatoshis) + BigInt(feeForSingleInput);
+
+        const singleUTXO = utxos.find(utxo => BigInt(utxo.value) >= targetForSingle);
+
+        if (singleUTXO) {
+            // Found a suitable single UTXO, this is the best case.
+            actualSelectedUtxos = [singleUTXO];
+            totalInputAmount = BigInt(singleUTXO.value);
+            actualFeeSatoshis = feeForSingleInput;
         } else {
-            // User entered fee is 0, use automatically calculated fee
-            const feePerByte = DEFAULT_FEE_RATE_SAT_PER_BYTE; // satoshis per byte
-            let selectionResult = selectUTXOs(utxos, totalAmountNeededSatoshis, feePerByte, opReturnDataLength);
+            // Strategy 2: Fallback to Largest-First Greedy Algorithm if no single UTXO is sufficient
+            utxos.sort((a, b) => b.value - a.value); // Re-sort from largest to smallest
 
-            if (!selectionResult) {
-                showAlert('Insufficient balance to pay amount, L2Scan fee and estimated fee', 'error');
-                return;
+            for (const utxo of utxos) {
+                actualSelectedUtxos.push(utxo);
+                totalInputAmount += BigInt(utxo.value);
+
+                // Estimate fee with the current number of inputs
+                let numOutputs = 1; // Recipient
+                if (l2scanFeeAddress && l2scanFeeSatoshis > 0) numOutputs++;
+                if (opReturnDataLength > 0) numOutputs++;
+                numOutputs++; // Assume change output will be needed
+
+                actualFeeSatoshis = calculateActualEstimatedFee(actualSelectedUtxos.length, numOutputs, feePerByte, opReturnDataLength);
+
+                // Check if we have gathered enough funds
+                if (totalInputAmount >= BigInt(totalAmountNeededSatoshis) + BigInt(actualFeeSatoshis)) {
+                    break; // Stop selecting once we have enough
+                }
             }
-
-            actualSelectedUtxos = selectionResult.selectedUtxos;
-            totalInputAmount = selectionResult.totalInputAmount;
-            actualFeeSatoshis = selectionResult.estimatedFee;
         }
 
-        let changeAmountSatoshis = totalInputAmount - totalAmountNeededSatoshis - actualFeeSatoshis;
+        // After the loop, check if we ultimately failed to gather enough funds
+        if (totalInputAmount < BigInt(totalAmountNeededSatoshis) + BigInt(actualFeeSatoshis)) {
+             showAlert(`Insufficient funds. Needed approx. ${(totalAmountNeededSatoshis + actualFeeSatoshis) / 1e8} DOGE, but only have ${Number(totalInputAmount) / 1e8} DOGE available.`, 'error');
+             return;
+        }
+        // --- End of UTXO Selection ---
 
-        if (changeAmountSatoshis < 0) {
-            showAlert('Insufficient balance after calculation (totalInput - amount - L2Scan fee - fee < 0), please adjust amount or wait for more UTXOs', 'error');
+        // Final check before creating the transaction
+        if (BigInt(totalInputAmount) < BigInt(totalAmountNeededSatoshis) + BigInt(actualFeeSatoshis)) {
+            const needed = (BigInt(totalAmountNeededSatoshis) + BigInt(actualFeeSatoshis));
+            showAlert(`Insufficient funds. Needed: ${Number(needed) / 1e8} DOGE, but only have ${Number(totalInputAmount) / 1e8} DOGE available.`, 'error');
             return;
         }
 
-        const DUST_THRESHOLD = 1000000; // 0.01 DOGE. If change is less, add to fee.
-        if (changeAmountSatoshis > 0 && changeAmountSatoshis < DUST_THRESHOLD) {
-            actualFeeSatoshis += changeAmountSatoshis; // Add dust to fee
-            changeAmountSatoshis = 0; // No change output
-        }
+        // The logic for handling dust change is now correctly inside createActualTransaction.
+        // We just pass the final calculated/specified fee.
 
-        const rawTxHex = await createActualTransaction(
-            actualSelectedUtxos,
+        const rawTxHex = await createActualTransaction({
+            selectedUtxos: actualSelectedUtxos,
             recipientAddress,
-            amountSatoshis,
-            wallet.address,
-            wallet.privateKey,
-            actualFeeSatoshis,
-            opReturnData || null,
+            amountToSendSatoshis: amountSatoshis,
+            changeAddress: wallet.address,
+            privateKeyHex: wallet.privateKey,
+            feeSatoshis: actualFeeSatoshis,
+            opReturnData: opReturnData || null,
             opReturnFormat,
             l2scanFeeAddress,
-            l2scanFeeSatoshis
-        );
+            l2scanFeeSatoshis,
+        });
+
+        // 打印最终的裸交易数据
+        console.log("Constructed Raw Transaction Hex:", rawTxHex);
 
         const txHashBytes = sha256Double(CryptoJS.enc.Hex.parse(rawTxHex));
         const localTxid = reverseHex(txHashBytes.toString(CryptoJS.enc.Hex));
@@ -817,6 +684,9 @@ async function sendTransaction() {
         });
 
         const broadcastedTxid = await broadcastTransaction(rawTxHex);
+        // After successful broadcast, immediately cache the spent UTXOs locally
+        addSpentUTXOsToCache(actualSelectedUtxos);
+
         // Use broadcastedTxid as the canonical one
         await addBroadcastedTransaction({
             txid: broadcastedTxid,
@@ -839,7 +709,27 @@ async function sendTransaction() {
         refreshBalanceAndUpdateUI(); // Refresh balance after sending
     } catch (error) {
         console.error("Transaction send failed details:", error);
-        showAlert('Transaction send failed: ' + error.message, 'error');
+        
+        // 检查具体的错误类型并给出友好提示
+        const errorMsg = error.message || '';
+        
+        if (errorMsg.includes('bad-txns-inputs-spent')) {
+            showAlert('Transaction failed: An input was already spent.\nThis can happen if you send transactions quickly.\nYour balance is being refreshed. Please try again.', 'error');
+            refreshBalanceAndUpdateUI();
+        } else if (errorMsg.includes('absurdly-high-fee')) {
+            showAlert('Transaction failed: Fee is too high.\nThis usually means there is an error in the transaction construction.\nPlease check the console for details.', 'error');
+        } else if (errorMsg.includes('insufficient fee') || errorMsg.includes('min relay fee')) {
+            showAlert('Transaction failed: Transaction fee is too low.\nPlease try again with a higher fee.', 'error');
+        } else if (errorMsg.includes('dust')) {
+            showAlert('Transaction failed: Output amount is too small (dust).\nMinimum amount is 0.001 DOGE per output.', 'error');
+        } else if (errorMsg.includes('bad-txns-inputs-missingorspent')) {
+            showAlert('Transaction failed: Input UTXOs are missing or already spent.\nYour balance is being refreshed. Please try again.', 'error');
+            refreshBalanceAndUpdateUI();
+        } else if (errorMsg.includes('txn-mempool-conflict')) {
+            showAlert('Transaction failed: Conflicting transaction in mempool.\nPlease wait a moment and try again.', 'error');
+        } else {
+            showAlert('Transaction send failed: ' + errorMsg, 'error');
+        }
     }
 }
 
@@ -859,54 +749,9 @@ function openInBrowser() {
 function testConnection() {
     showAlert('Connection test feature not yet implemented', 'info');
 }
-// Historical Transactions
-async function fetchTransactionHistory(address) {
-    if (!address) return [];
-    try {
-        const electrsBase = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.useElectrsProxy ? '/electrs' : 'https://doge-electrs-testnet-demo.qed.me';
-        const apiUrl = `${electrsBase}/address/${address}/txs`;
-
-        const response = await fetch(apiUrl); // May need CORS proxy if not using local proxy
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`API request failed: ${response.status} - ${errorText}`);
-        }
-        const txs = await response.json();
-        return txs.map(tx => ({
-            txid: tx.txid,
-            fee: tx.fee,
-            confirmed: tx.status.confirmed,
-            block_height: tx.status.block_height,
-            block_time: tx.status.block_time ? new Date(tx.status.block_time * 1000).toLocaleString() : 'N/A'
-        }));
-    } catch (error) {
-        console.error('Failed to fetch transaction history:', error);
-        showAlert('Failed to fetch transaction history: ' + error.message, 'error');
-        return [];
-    }
-}
-
-function viewTransactionHistory(transactions) {
-    const historyList = document.getElementById('transactionHistoryList'); // Ensure this element exists in HTML
-    if (!historyList) return;
-
-    if (transactions.length === 0) {
-        historyList.innerHTML = '<li>No historical transactions.</li>';
-        return;
-    }
-    historyList.innerHTML = transactions.map(tx => `
-        <li><strong>TXID:</strong> <a href="https://sochain.com/tx/DOGETEST/${tx.txid}" target="_blank">${tx.txid}</a><br>
-            <strong>Status:</strong> ${tx.confirmed ? `Confirmed (Block ${tx.block_height || 'N/A'})` : 'Unconfirmed'}<br>
-            <strong>Time:</strong> ${tx.block_time} ${tx.fee ? `<br><strong>Fee:</strong> ${(tx.fee / 1e8).toFixed(8)} DOGE` : ''}</li>`).join('');
-}
 
 async function refreshWalletTransactionHistory() {
-    if (wallet.address) {
-        const history = await fetchTransactionHistory(wallet.address);
-        viewTransactionHistory(history);
-    } else {
-        viewTransactionHistory([]); // Clear history if no wallet
-    }
+
 }
 
 // Function to load broadcasted transactions from DB for the current wallet
@@ -949,7 +794,7 @@ async function checkPendingTransactionsStatus() {
                 amount: 0, // Or try to parse from vout if relevant to wallet.address
                 recipient: 'N/A', // Or try to parse
                 fee: apiTx.fee / 1e8,
-                broadcastTime: apiTx.status.block_time || Date.now(), // block_time for mempool tx is usually null
+                broadcastTime: apiTx.block_time || Date.now(), // block_time for mempool tx is usually null
                 address: wallet.address,
                 status: 'pending', // All mempool txs are pending
                 apiSource: true // Flag to indicate it came from API
@@ -969,16 +814,16 @@ async function checkPendingTransactionsStatus() {
 
     for (const tx of pendingToCheck) {
         try {
-            const electrsBase = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.useElectrsProxy ? '/electrs' : 'https://doge-electrs-testnet-demo.qed.me';
+            const electrsBase = 'https://blockbook.qiaoxiaorui.org/api/v2';
             const apiUrl = `${electrsBase}/tx/${tx.txid}`;
             const response = await fetch(apiUrl);
             const txData = response.ok ? await response.json() : null;
 
-            if (txData && txData.status && txData.status.confirmed) {
+            if (txData && txData.confirmations > 0) {
                 const newStatusDetails = {
                     status: 'confirmed',
-                    block_height: txData.status.block_height,
-                    block_time: txData.status.block_time
+                    block_height: txData.blockHeight,
+                    block_time: txData.blockTime
                 };
                 // The key for IndexedDB is an array [address, txid]
                 const dbKey = [wallet.address, tx.txid];
@@ -990,10 +835,6 @@ async function checkPendingTransactionsStatus() {
                     Object.assign(broadcastedTransactions[indexInBroadcasted], newStatusDetails);
                 }
                 console.log(`Transaction ${tx.txid} confirmed.`);
-            } else if (txData && txData.status && !txData.status.confirmed && !tx.apiSource) {
-                // It's still pending according to the API, and it's one of our locally initiated ones. No change needed.
-            } else if (!txData && !tx.apiSource) {
-                console.warn(`Failed to fetch status for locally initiated TX ${tx.txid} or it's not found. It remains pending locally.`);
             }
             // Add handling for reorgs or if a tx might become "failed" if not found after a long time (more complex)
         } catch (error) {
@@ -1005,11 +846,9 @@ async function checkPendingTransactionsStatus() {
     viewBroadcastedTransactions();
 }
 export {
-    selectUTXOs,
     createScriptPubKey,
     createOpReturnScript,
     serializeTransaction,
-    calculateFee,
     sendTransaction,
     openInBrowser,
     testConnection,

@@ -1,6 +1,3 @@
-import { getElectrsUrl } from './network.js';
-import { wallet } from './wallet.js';
-
 const DB_NAME = 'dogecoin_wallet_db';
 const DB_VERSION = 2; // Increment this version
 const WALLET_STORE = 'wallets';
