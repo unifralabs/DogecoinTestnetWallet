@@ -22,6 +22,18 @@ function toLittleEndianHex(value, byteLength) {
     return littleEndianHex;
 }
 
+// Helper function to encode a number in CompactSize format (VarInt)
+function toCompactSizeBytes(value) {
+    if (value < 0xfd) {
+        return value.toString(16).padStart(2, '0');
+    } else if (value <= 0xffff) {
+        return 'fd' + toLittleEndianHex(value, 2);
+    } else if (value <= 0xffffffff) {
+        return 'fe' + toLittleEndianHex(value, 4);
+    } else {
+        return 'ff' + toLittleEndianHex(value, 8);
+    }
+}
 const DEFAULT_FEE_RATE_SAT_PER_BYTE = 1000; // 0.01 DOGE per kB = 1,000,000 satoshis per kB / 1000 bytes = 1000 satoshis per byte (Dogecoin standard relay fee)
 
 function createScriptPubKey(address) {
@@ -81,20 +93,20 @@ function createSignInputScript(signatureHexWithSighash, publicKeyHex) {
 function serializeTransaction(tx) {
     let serialized = '';
     serialized += tx.version.toString(16).padStart(8, '0');
-    serialized += tx.inputCount.toString(16).padStart(2, '0');
+    serialized += toCompactSizeBytes(tx.inputCount);
 
     tx.inputs.forEach(input => {
         serialized += reverseHex(input.txid);
         serialized += toLittleEndianHex(input.vout, 4); // vout is 4 bytes LE
-        serialized += input.scriptLength.toString(16).padStart(2, '0');
+        serialized += toCompactSizeBytes(input.script.length / 2);
         serialized += input.script;
         serialized += input.sequence.toString(16).padStart(8, '0');
     });
 
-    serialized += tx.outputCount.toString(16).padStart(2, '0');
+    serialized += toCompactSizeBytes(tx.outputCount);
     tx.outputs.forEach(output => {
         serialized += toLittleEndianHex(output.value, 8); // value is 8 bytes LE
-        serialized += output.scriptLength.toString(16).padStart(2, '0');
+        serialized += toCompactSizeBytes(output.script.length / 2);
         serialized += output.script;
     });
 
@@ -341,7 +353,7 @@ async function createActualTransaction(options) {
             scriptPubKeyToSpend: scriptPubKeyForInputs
         });
     });
-    const inputCountHex = inputs.length.toString(16).padStart(2, '0');
+    const inputCountHex = toCompactSizeBytes(inputs.length);
 
     const outputs = [];
     const recipientScriptPubKey = createScriptPubKey(recipientAddress);
@@ -397,7 +409,7 @@ async function createActualTransaction(options) {
     }
     console.log("---------------------");
     
-    // 打印 outputs 的详细信息
+    // Log detailed output information
     console.log("--- OUTPUTS BREAKDOWN ---");
     outputs.forEach((output, index) => {
         const amountDOGE = Number(output.value) / 1e8;
@@ -407,7 +419,7 @@ async function createActualTransaction(options) {
         
         if (scriptType === 'OP_RETURN') {
             console.log(`Output ${index}: ${amountDOGE.toFixed(8)} DOGE (${output.value} satoshis) - ${scriptType} data`);
-        } else {
+        } else { // Attempt to extract address info from scriptPubKey (simplified)
             // 尝试从 scriptPubKey 中提取地址信息（简化版）
             let addressInfo = 'Unknown address';
             if (scriptType === 'P2PKH') {
@@ -422,13 +434,13 @@ async function createActualTransaction(options) {
     });
     console.log(`Total Outputs: ${outputs.length}`);
     
-    // 计算总输出金额
+    // Calculate total output amount
     let totalOutputAmount = 0n;
     outputs.forEach(output => {
         totalOutputAmount += BigInt(output.value);
     });
     
-    // 计算实际费用
+    // Calculate actual fee
     const actualFeeSatoshis = totalInputAmountSatoshis - totalOutputAmount;
     console.log("--- FINAL FEE CALCULATION ---");
     console.log(`Total Input: ${totalInputAmountSatoshis} satoshis (${Number(totalInputAmountSatoshis) / 1e8} DOGE)`);
@@ -442,7 +454,7 @@ async function createActualTransaction(options) {
     }
     console.log("-----------------------------");
 
-    const outputCountHex = outputs.length.toString(16).padStart(2, '0');
+    const outputCountHex = toCompactSizeBytes(outputs.length);
 
     const ec = new window.elliptic.ec('secp256k1');
     const keyPair = ec.keyFromPrivate(privateKeyHex, 'hex');
@@ -458,7 +470,7 @@ async function createActualTransaction(options) {
             txToSignParts.push(toLittleEndianHex(inputs[j].vout, 4));
             if (i === j) {
                 const scriptToSign = inputs[j].scriptPubKeyToSpend;
-                txToSignParts.push((scriptToSign.length / 2).toString(16).padStart(2, '0'));
+                txToSignParts.push(toCompactSizeBytes(scriptToSign.length / 2));
                 txToSignParts.push(scriptToSign);
             } else {
                 txToSignParts.push('00'); // scriptSig length 0 for other inputs
@@ -469,7 +481,7 @@ async function createActualTransaction(options) {
         txToSignParts.push(outputCountHex);
         outputs.forEach(output => {
             txToSignParts.push(toLittleEndianHex(output.value, 8));
-            txToSignParts.push((output.scriptPubKey.length / 2).toString(16).padStart(2, '0'));
+            txToSignParts.push(toCompactSizeBytes(output.scriptPubKey.length / 2));
             txToSignParts.push(output.scriptPubKey);
         });
         txToSignParts.push(locktime);
@@ -492,14 +504,14 @@ async function createActualTransaction(options) {
     inputs.forEach(input => {
         finalTxHexParts.push(reverseHex(input.txid));
         finalTxHexParts.push(toLittleEndianHex(input.vout, 4));
-        finalTxHexParts.push((input.scriptSig.length / 2).toString(16).padStart(2, '0'));
+        finalTxHexParts.push(toCompactSizeBytes(input.scriptSig.length / 2));
         finalTxHexParts.push(input.scriptSig);
         finalTxHexParts.push(input.sequence);
     });
     finalTxHexParts.push(outputCountHex);
     outputs.forEach(output => {
         finalTxHexParts.push(toLittleEndianHex(output.value, 8));
-        finalTxHexParts.push((output.scriptPubKey.length / 2).toString(16).padStart(2, '0'));
+        finalTxHexParts.push(toCompactSizeBytes(output.scriptPubKey.length / 2));
         finalTxHexParts.push(output.scriptPubKey);
     });
     finalTxHexParts.push(locktime);
