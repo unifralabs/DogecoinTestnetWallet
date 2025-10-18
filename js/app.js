@@ -2,7 +2,7 @@ import { initializeCrypto } from './crypto-utils.js';
 import { wallet, generateWallet, loadWallet, deleteCurrentWallet, importWallet } from './wallet.js';
 import { fetchBalance, useElectrs, useElectrsProxy } from './network.js';
 import { showAlert, updateWalletUI, copyToClipboard } from './ui.js';
-import { testConnection, sendTransaction, openInBrowser, viewPendingTransactions, viewBroadcastedTransactions, refreshWalletTransactionHistory, loadPersistedBroadcastedTransactions, checkPendingTransactionsStatus } from './transaction.js';
+import { testConnection, sendTransactionWithUi, openInBrowser, viewPendingTransactions, viewBroadcastedTransactions, refreshWalletTransactionHistory, loadPersistedBroadcastedTransactions, checkPendingTransactionsStatus } from './transaction.js';
 import { updateWalletList } from './storage.js';
 
 let autoRefreshInterval = null;
@@ -210,7 +210,7 @@ function addEventListeners() {
     document.getElementById('refreshBalanceBtn')?.addEventListener('click', () => refreshBalance());
     document.getElementById('testConnectionBtn')?.addEventListener('click', () => testConnection());
     const transactionButtons = {
-        sendTransactionBtn: sendTransaction,
+        sendTransactionBtn: sendTransactionWithUi,
         viewInBrowser: (e) => {
             e.preventDefault();
             openInBrowser();

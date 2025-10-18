@@ -2,7 +2,7 @@ import { wallet } from './wallet.js';
 import { getUTXOs, getVerifiedUTXOs, broadcastTransaction, fetchMempoolTransactions, fetchBalance } from './network.js';
 import { sha256Double } from './crypto-utils.js';
 import { saveBroadcastedTxToDB, getBroadcastedTxsFromDB, getPendingTxsFromDB, updateTxStatusInDB } from './storage.js';
-import { showAlert, updateWalletUI } from './ui.js'; // Added updateWalletUI for balance refresh
+import { showAlert, startSendLoading, stopSendLoading, updateWalletUI } from './ui.js'; // Added updateWalletUI for balance refresh
 
 // Helper function to convert a number to a little-endian hex string of a specific byte length
 function toLittleEndianHex(value, byteLength) {
@@ -171,7 +171,7 @@ function addSpentUTXOsToCache(utxos) {
         const fifteenMinutesAgo = now - 15 * 60 * 1000;
         const existingIds = new Set(newEntries.map(e => e.id));
         const updatedCache = cache.filter(item => item.timestamp > fifteenMinutesAgo && !existingIds.has(item.id));
-        
+
         localStorage.setItem('spent_utxos_cache', JSON.stringify([...updatedCache, ...newEntries]));
     } catch (error) {
         console.error("Failed to update spent UTXOs cache:", error);
@@ -305,9 +305,10 @@ async function createActualTransaction(options) {
     // --- 详细调试日志 ---
     console.log("--- Detailed Transaction Breakdown ---");
     console.log("--- INPUTS ---");
-    selectedUtxos.forEach((utxo, index) => {
-        console.log(`Input ${index}: value=${utxo.value} satoshis (from tx ${utxo.txid.substring(0, 10)}...:${utxo.vout})`);
-    });
+    // selectedUtxos.forEach((utxo, index) => {
+    //     console.log(`Input ${index}: value=${utxo.value} satoshis (from tx ${utxo.txid.substring(0, 10)}...:${utxo.vout})`);
+    // });
+    console.log(`inputCount=${selectedUtxos.length}`);
     console.log(`Total Input Value: ${totalInputAmountSatoshis} satoshis`);
     console.log("--- FEES ---");
     console.log(`Transaction Fee: ${feeSatoshis} satoshis (${(feeSatoshis / 1e8).toFixed(8)} DOGE)`);
@@ -389,7 +390,7 @@ async function createActualTransaction(options) {
     console.log("--- DUST HANDLING ---");
     console.log(`Dust Threshold: ${DUST_THRESHOLD_SATOSHIS} satoshis (${DUST_THRESHOLD_SATOSHIS / 1e8} DOGE)`);
     console.log(`Change Amount: ${finalChangeAmountSatoshis} satoshis (${Number(finalChangeAmountSatoshis) / 1e8} DOGE)`);
-    
+
     if (finalChangeAmountSatoshis > 0n && finalChangeAmountSatoshis < DUST_THRESHOLD_SATOSHIS) {
         // If change is positive but less than dust, add it to the fee.
         console.log(`⚠️ Change is dust, adding to fee: ${finalChangeAmountSatoshis} satoshis`);
@@ -408,15 +409,15 @@ async function createActualTransaction(options) {
         console.log(`No change needed (exact amount)`);
     }
     console.log("---------------------");
-    
+
     // Log detailed output information
     console.log("--- OUTPUTS BREAKDOWN ---");
     outputs.forEach((output, index) => {
         const amountDOGE = Number(output.value) / 1e8;
-        const scriptType = output.scriptPubKey.startsWith('76a914') ? 'P2PKH' : 
-                          output.scriptPubKey.startsWith('a914') ? 'P2SH' : 
-                          output.scriptPubKey.startsWith('6a') ? 'OP_RETURN' : 'Unknown';
-        
+        const scriptType = output.scriptPubKey.startsWith('76a914') ? 'P2PKH' :
+            output.scriptPubKey.startsWith('a914') ? 'P2SH' :
+                output.scriptPubKey.startsWith('6a') ? 'OP_RETURN' : 'Unknown';
+
         if (scriptType === 'OP_RETURN') {
             console.log(`Output ${index}: ${amountDOGE.toFixed(8)} DOGE (${output.value} satoshis) - ${scriptType} data`);
         } else { // Attempt to extract address info from scriptPubKey (simplified)
@@ -433,13 +434,13 @@ async function createActualTransaction(options) {
         }
     });
     console.log(`Total Outputs: ${outputs.length}`);
-    
+
     // Calculate total output amount
     let totalOutputAmount = 0n;
     outputs.forEach(output => {
         totalOutputAmount += BigInt(output.value);
     });
-    
+
     // Calculate actual fee
     const actualFeeSatoshis = totalInputAmountSatoshis - totalOutputAmount;
     console.log("--- FINAL FEE CALCULATION ---");
@@ -518,7 +519,18 @@ async function createActualTransaction(options) {
     return finalTxHexParts.join('');
 }
 
+async function sendTransactionWithUi() {
+    startSendLoading('Preparing transaction...');
+    try {
+        await sendTransaction(); 
+    } finally {
+        stopSendLoading();
+    }
+}
+
 async function sendTransaction() {
+    //
+
     if (!wallet.address || !wallet.privateKey) {
         showAlert('Please create or import wallet first', 'error');
         return;
@@ -602,7 +614,7 @@ async function sendTransaction() {
 
         const feePerByte = DEFAULT_FEE_RATE_SAT_PER_BYTE; // satoshis per byte
         let outputAmount = l2scanFeeAmount + amountSatoshis;
-        
+
         // --- UTXO Selection Logic ---
         let actualSelectedUtxos = [];
         let totalInputAmount = 0n;
@@ -651,8 +663,8 @@ async function sendTransaction() {
 
         // After the loop, check if we ultimately failed to gather enough funds
         if (totalInputAmount < BigInt(totalAmountNeededSatoshis) + BigInt(actualFeeSatoshis)) {
-             showAlert(`Insufficient funds. Needed approx. ${(totalAmountNeededSatoshis + actualFeeSatoshis) / 1e8} DOGE, but only have ${Number(totalInputAmount) / 1e8} DOGE available.`, 'error');
-             return;
+            showAlert(`Insufficient funds. Needed approx. ${(totalAmountNeededSatoshis + actualFeeSatoshis) / 1e8} DOGE, but only have ${Number(totalInputAmount) / 1e8} DOGE available.`, 'error');
+            return;
         }
         // --- End of UTXO Selection ---
 
@@ -679,8 +691,8 @@ async function sendTransaction() {
             l2scanFeeSatoshis,
         });
 
-        // 打印最终的裸交易数据
-        console.log("Constructed Raw Transaction Hex:", rawTxHex);
+        console.log("Constructed Raw Transaction Hex Size:", rawTxHex.length);
+        //console.log("Constructed Raw Transaction Hex:", rawTxHex);
 
         const txHashBytes = sha256Double(CryptoJS.enc.Hex.parse(rawTxHex));
         const localTxid = reverseHex(txHashBytes.toString(CryptoJS.enc.Hex));
@@ -721,10 +733,10 @@ async function sendTransaction() {
         refreshBalanceAndUpdateUI(); // Refresh balance after sending
     } catch (error) {
         console.error("Transaction send failed details:", error);
-        
+
         // 检查具体的错误类型并给出友好提示
         const errorMsg = error.message || '';
-        
+
         if (errorMsg.includes('bad-txns-inputs-spent')) {
             showAlert('Transaction failed: An input was already spent.\nThis can happen if you send transactions quickly.\nYour balance is being refreshed. Please try again.', 'error');
             refreshBalanceAndUpdateUI();
@@ -861,7 +873,7 @@ export {
     createScriptPubKey,
     createOpReturnScript,
     serializeTransaction,
-    sendTransaction,
+    sendTransactionWithUi,
     openInBrowser,
     testConnection,
     viewPendingTransactions,

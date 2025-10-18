@@ -54,7 +54,7 @@ async function broadcastTransaction(txHex) {
     try {
         // 使用 Blockbook API
         const baseUrl = "https://blockbook.qiaoxiaorui.org/api/v2";
-        console.log('Broadcasting transaction via Blockbook:', txHex);
+        console.log('Broadcasting transaction via Blockbook:txHex.length=', txHex.length);
         
         // Blockbook 的 sendtx 接口（POST 方式）
         const response = await fetch(`${baseUrl}/sendtx/`, {

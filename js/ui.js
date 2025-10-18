@@ -89,10 +89,74 @@ function fallbackCopy(text, successMessage) {
     }
 }
 
+// Start the send button loading state and optionally show a progress message
+function startSendLoading(message = 'Sending...') {
+    try {
+        const sendBtn = document.getElementById('sendTransactionBtn');
+        const progress = document.getElementById('sendProgressText');
+        // disable and visually dim the button, and replace its text with the message
+        if (sendBtn) {
+            // save original text so we can restore later
+            if (!sendBtn.dataset.originalText) sendBtn.dataset.originalText = sendBtn.textContent;
+            sendBtn.textContent = message;
+            sendBtn.disabled = true;
+            sendBtn.classList.add('btn-loading');
+            // Quick inline visual change in case CSS for disabled buttons is not defined
+            sendBtn.style.opacity = '0.6';
+            sendBtn.style.cursor = 'not-allowed';
+        }
+
+        // hide any page-level spinner if present (we no longer use it)
+        const pageSpinner = document.getElementById('sendSpinner');
+        if (pageSpinner) pageSpinner.classList.add('hidden');
+
+        if (progress) progress.textContent = message;
+    } catch (e) {
+        console.warn('startSendLoading failed', e);
+    }
+}
+
+// Stop the send button loading state and optionally show a final message briefly
+function stopSendLoading(finalMessage = '') {
+    try {
+        const sendBtn = document.getElementById('sendTransactionBtn');
+        const progress = document.getElementById('sendProgressText');
+
+        if (sendBtn) {
+            // restore original text if we saved it
+            if (sendBtn.dataset.originalText) {
+                sendBtn.textContent = sendBtn.dataset.originalText;
+                delete sendBtn.dataset.originalText;
+            }
+            sendBtn.disabled = false;
+            sendBtn.classList.remove('btn-loading');
+            sendBtn.style.opacity = '';
+            sendBtn.style.cursor = '';
+        }
+
+        // ensure any page-level spinner is hidden
+        const pageSpinner = document.getElementById('sendSpinner');
+        if (pageSpinner) pageSpinner.classList.add('hidden');
+
+        if (progress) {
+            if (finalMessage) {
+                progress.textContent = finalMessage;
+                setTimeout(() => { if (progress) progress.textContent = ''; }, 1800);
+            } else {
+                progress.textContent = '';
+            }
+        }
+    } catch (e) {
+        console.warn('stopSendLoading failed', e);
+    }
+}
+
 export {
     updateWalletUI,
     updateCopyButtons,
     showAlert,
     copyToClipboard,
     fallbackCopy
+    ,startSendLoading,
+    stopSendLoading
 };
