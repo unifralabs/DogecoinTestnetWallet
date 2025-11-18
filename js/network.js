@@ -102,7 +102,7 @@ async function broadcastTransaction(txHex) {
 async function fetchMempoolTransactions(address) {
     try {
         const baseUrl = blockBookApiV2();
-        const apiUrl = `${baseUrl}/address/${address}?details=txs`;
+        const apiUrl = `${baseUrl}/address/${address}?details=txids`;
 
         const response = await fetch(apiUrl);
         if (response.ok) {
