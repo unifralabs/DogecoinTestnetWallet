@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DogeOS Protocol Parser</title>
+  <script src="https://unpkg.com/fzstd@0.1.1/umd/index.js"></script>
+  <style>
+    :root {
+      --primary: #ffb11a;
+      --bg: #1a1a1a;
+      --card-bg: #242424;
+      --text: #ddd;
+      --border: #444;
+      --input-bg: #111;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 16px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: var(--primary);
+      font-size: 1.4rem;
+      margin: 0 0 12px 0;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 6px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      margin-bottom: 12px;
+      display: none;
+    }
+
+    .card.active {
+      display: block;
+    }
+
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .row-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .row-group .input-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    label {
+      font-weight: 600;
+      color: var(--primary);
+      font-size: 0.85rem;
+    }
+
+    .sub-label {
+      font-size: 0.7rem;
+      color: #888;
+    }
+
+    input[type="text"],
+    textarea {
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 6px 8px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 0.85rem;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 50px;
+    }
+
+    input:focus,
+    textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    button {
+      background: var(--primary);
+      color: #000;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    button.secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    button.secondary:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    .tab {
+      padding: 6px 12px;
+      background: #333;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      color: #888;
+    }
+
+    .tab.active {
+      background: var(--primary);
+      color: #000;
+    }
+
+    .result-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .result-item {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      padding: 8px;
+      border-radius: 4px;
+      word-break: break-all;
+    }
+
+    .label {
+      font-size: 0.7rem;
+      color: #888;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+
+    .value {
+      font-size: 0.9rem;
+      font-family: monospace;
+      color: #fff;
+    }
+
+    .highlight {
+      color: var(--primary);
+      font-weight: bold;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    .status-v1 {
+      background: #1a3e2a;
+      color: #4ade80;
+    }
+
+    .status-v0 {
+      background: #3e2a1a;
+      color: #fbbf24;
+    }
+
+    .error-msg {
+      color: #ff4d4d;
+      background: rgba(255, 77, 77, 0.1);
+      padding: 8px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      display: none;
+      border: 1px solid #ff4d4d;
+      font-size: 0.85rem;
+    }
+
+    .settings-panel {
+      background: rgba(0, 0, 0, 0.2);
+      padding: 10px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      border: 1px dashed var(--border);
+    }
+
+    footer {
+      color: #555;
+      font-size: 0.75rem;
+      padding: 12px 0;
+      text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="container">
+    <h1>DogeOS Protocol Parser</h1>
+
+    <div class="tabs">
+      <div id="tab-opr" class="tab active" onclick="switchTab('opr')">1. OP_RETURN Parser</div>
+      <div id="tab-blob" class="tab" onclick="switchTab('blob')">2. DA Blob Inspector</div>
+    </div>
+
+    <!-- OP_RETURN Card -->
+    <div id="card-opr" class="card active">
+      <div class="input-group">
+        <label>Input Settlement Transaction OP_RETURN Content</label>
+        <textarea id="opReturnHex" placeholder="6a... (Hex)"></textarea>
+        <button onclick="parseOpReturn()">Parse L1 Payload</button>
+      </div>
+      <div id="errorBoxOpr" class="error-msg"></div>
+      <div id="resultCardOpr" style="display: none; margin-top: 30px;">
+        <div id="versionBadge" class="status-badge" style="display: none;"></div>
+        <div id="resultsOpr" class="result-grid"></div>
+        <div style="margin-top:20px; text-align:right;">
+          <button class="secondary" onclick="jumpToBlobTab()">→ Fetch DA Blob</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- DA Blob Card -->
+    <div id="card-blob" class="card">
+      <!-- Settings Panel -->
+      <div class="settings-panel">
+        <label style="margin-bottom:10px; display:block;">Celestia Node Configuration</label>
+        <div class="row-group">
+          <div class="input-wrapper">
+            <span class="sub-label">RPC URL (Select or Input)</span>
+            <input type="text" id="celRpcUrl" list="rpcList" value="https://api-mocha-4.celenium.io"
+              placeholder="http://ip:26658">
+            <datalist id="rpcList">
+              <option value="https://api-mocha-4.celenium.io">Celenium API (Public Recommended)</option>
+              <option value="http://localhost:26658">Local Light Node</option>
+              <option value="https://rpc-mocha.pops.one">Pops.one (Consensus Layer Only)</option>
+            </datalist>
+          </div>
+          <div class="input-wrapper">
+            <span class="sub-label">Auth Token (Optional)</span>
+            <input type="text" id="celAuthToken" placeholder="JWT Token">
+          </div>
+        </div>
+        <div class="row-group" style="margin-top:10px;">
+          <div class="input-wrapper">
+            <span class="sub-label">Namespace (Hex or Base64)</span>
+            <input type="text" id="celNamespace" value="cedd87ff225dd551" placeholder="e.g. cedd87ff225dd551"
+              onblur="autoConvertNamespace()">
+            <div id="nsHint" style="font-size:0.75rem; color:#f39c12; display:none; margin-top:4px;">Auto-converted Hex to Base64
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="input-group">
+        <label>Fetch Parameters (Defaults for Mocha Testnet)</label>
+        <div class="row-group">
+          <div class="input-wrapper">
+            <span class="sub-label">Celestia Height</span>
+            <input type="text" id="targetHeight" placeholder="12345" value="9806756">
+          </div>
+          <div class="input-wrapper" style="flex: 2;">
+            <span class="sub-label">Commitment (Base64)</span>
+            <input type="text" id="targetCommitment" placeholder="Hash..."
+              value="">
+          </div>
+          <button onclick="fetchFromCelestia()" style="margin-top: auto;">Remote Fetch</button>
+        </div>
+      </div>
+
+      <div class="input-group">
+        <label>Raw Blob Data (Auto-filled or Manual Paste)</label>
+        <textarea id="blobHex" placeholder="Auto-filled after clicking &quot;Remote Fetch&quot;..."></textarea>
+        <button onclick="parseBlob()">Start Deep Parse</button>
+      </div>
+
+      <div id="errorBoxBlob" class="error-msg"></div>
+      <div id="resultCardBlob" style="display: none; margin-top: 30px;">
+        <div class="status-badge status-v1" style="display: inline-block;">Protobuf: VersionedBlob</div>
+        <div id="resultsBlob" class="result-grid"></div>
+
+        <div class="input-group" style="margin-top: 20px;">
+          <label>Decompressed Data (Hex)</label>
+          <textarea id="decompressedHex" readonly
+            style="color: #ababae; font-family: 'Fira Code', monospace; min-height: 120px;"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    DogeOS Protocol Toolkit &copy; 2026 | L1 <-> DA Bridge Inspector
+  </footer>
+
+  <script>
+    // Global state to store parsed OP_RETURN data for jumping
+    let lastOprData = null;
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.card').forEach(c => c.classList.remove('active'));
+      document.getElementById(`tab-${tab}`).classList.add('active');
+      document.getElementById(`card-${tab}`).classList.add('active');
+    }
+
+    function jumpToBlobTab() {
+      if (!lastOprData) return;
+      switchTab('blob');
+      document.getElementById('targetHeight').value = lastOprData.celHeight;
+      document.getElementById('targetCommitment').value = lastOprData.daCommitmentB64;
+    }
+
+    function autoConvertNamespace() {
+      const nsInput = document.getElementById('celNamespace');
+      let val = nsInput.value.trim();
+      const hint = document.getElementById('nsHint');
+
+      // 1. 如果是 hex 且长度 <= 58 (29 bytes)，尝试补齐前导零到 58 长度
+      if (/^[0-9a-fA-F]+$/.test(val) && !val.includes('=')) {
+        if (val.length <= 58) {
+          val = val.padStart(58, '0');
+        }
+
+        if (val.length === 58) {
+          try {
+            const b64 = hexToBase64(val);
+            nsInput.value = b64;
+            hint.innerText = "Padded leading zeros and converted to Celenium Base64";
+            hint.style.display = 'block';
+            setTimeout(() => hint.style.display = 'none', 3000);
+          } catch (e) { }
+        }
+      }
+    }
+
+    function parseOpReturn() {
+      const input = document.getElementById('opReturnHex').value.trim().toLowerCase();
+      const errorBox = document.getElementById('errorBoxOpr');
+      const results = document.getElementById('resultsOpr');
+      const resultCard = document.getElementById('resultCardOpr');
+      const versionBadge = document.getElementById('versionBadge');
+
+      errorBox.style.display = 'none';
+      resultCard.style.display = 'none';
+      lastOprData = null;
+
+      try {
+        let hex = input;
+        if (hex.startsWith('6a')) hex = hex.substring(4);
+        const bytes = hexToBytes(hex);
+        if (bytes.length < 37) throw new Error(`Data too short (${bytes.length} bytes)`);
+
+        let offset = 0;
+        const flagByte = bytes[offset++];
+        const version = flagByte >> 1;
+        const isLast = (flagByte & 0x01) !== 0;
+
+        const fields = [];
+        let celHeight, daHash, daHashB64;
+
+        if (version === 0) {
+          // V0
+          daHash = bytesToHex(bytes.slice(offset, offset + 32));
+          daHashB64 = hexToBase64(daHash);
+          offset += 32;
+
+          const r1 = decodeVarInt(bytes, offset);
+          celHeight = r1.val;
+          offset += r1.size;
+
+          // Add generic fields
+          fields.push({ label: 'Celestia Height', value: celHeight.toString() });
+          fields.push({ label: 'Bundle ID', value: decodeVarInt(bytes, offset).val.toString() });
+        } else if (version === 1) {
+          // V1
+          const stateRoot = bytesToHex(bytes.slice(offset, offset + 32));
+          offset += 32;
+          fields.push({ label: 'State Root', value: '0x' + stateRoot });
+
+          daHash = bytesToHex(bytes.slice(offset, offset + 32));
+          daHashB64 = hexToBase64(daHash);
+          offset += 32;
+
+          const r1 = decodeVarInt(bytes, offset);
+          celHeight = r1.val;
+          offset += r1.size;
+
+          fields.push({ label: 'Celestia Height', value: celHeight.toString() });
+          fields.push({ label: 'Bundle ID', value: decodeVarInt(bytes, offset).val.toString() });
+        }
+
+        // Save for jump
+        lastOprData = { celHeight, daCommitmentB64: daHashB64 };
+
+        // Render
+        fields.unshift({ label: 'DA Commitment', value: daHashB64 }); // Put at top
+        fields.unshift({ label: 'Protocol Version', value: `V${version}` });
+
+        results.innerHTML = '';
+        fields.forEach(f => {
+          const div = document.createElement('div');
+          div.className = 'result-item animate-in';
+          div.innerHTML = `<div class="label">${f.label}</div><div class="value">${f.value}</div>`;
+          results.appendChild(div);
+        });
+
+        resultCard.style.display = 'block';
+        versionBadge.innerText = `Protocol: V${version}`;
+        versionBadge.className = `status-badge status-v${version}`;
+        versionBadge.style.display = 'inline-block';
+
+      } catch (e) {
+        errorBox.innerText = 'Parse Error: ' + e.message;
+        errorBox.style.display = 'block';
+      }
+    }
+
+    async function fetchFromCelestia() {
+      const errorBox = document.getElementById('errorBoxBlob');
+      errorBox.style.display = 'none';
+
+      let rpcUrl = document.getElementById('celRpcUrl').value.replace(/\/$/, '');
+      const authToken = document.getElementById('celAuthToken').value.trim();
+      const height = parseInt(document.getElementById('targetHeight').value);
+      let namespace = document.getElementById('celNamespace').value.trim();
+      const commitment = document.getElementById('targetCommitment').value.trim();
+
+      if (!height || !namespace || !commitment) {
+        errorBox.innerText = 'Please fill in all parameters (Height, Namespace, Commitment)';
+        errorBox.style.display = 'block';
+        return;
+      }
+
+      // Auto-convert/Pad hex namespace to base64 if needed
+      // Logic copied from autoConvertNamespace for submit safety
+      if (!namespace.endsWith('=') && /^[0-9a-fA-F]+$/.test(namespace)) {
+        // Force pad to 58 chars (29 bytes) if it looks like a hex namespace
+        if (namespace.length <= 58) namespace = namespace.padStart(58, '0');
+        if (namespace.length === 58) {
+          namespace = hexToBase64(namespace);
+          document.getElementById('celNamespace').value = namespace;
+        }
+      }
+
+      const button = event.target;
+      const originalText = button.innerText;
+      button.innerText = 'Fetching...';
+      button.disabled = true;
+
+      try {
+        let blobData;
+
+        // Custom logic for Celenium API
+        if (rpcUrl.includes('celenium.io')) {
+          // Ensure URL points to v1/blob for POST
+          // If user just pasted base domain, append path
+          if (!rpcUrl.includes('/v1/blob')) rpcUrl += '/v1/blob';
+
+          // Celenium payload structure
+          const payload = {
+            height: height,
+            hash: namespace, // Celenium uses 'hash' for namespace
+            commitment: commitment,
+            metadata: false
+          };
+
+          const response = await fetch(rpcUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+          const json = await response.json();
+          // Celenium returns base64 in 'data' field directly
+          blobData = json.data;
+
+        } else {
+          // Standard JSON-RPC (Celestia Node)
+          const payload = {
+            jsonrpc: "2.0",
+            id: 1,
+            method: "blob.Get",
+            params: [height, namespace, commitment]
+          };
+
+          const headers = { 'Content-Type': 'application/json' };
+          if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
+          const response = await fetch(rpcUrl, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(payload)
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
+          }
+
+          const json = await response.json();
+          if (json.error) {
+            const msg = json.error.message;
+            if (msg && (msg.includes("Method not found") || msg.includes("method not found"))) {
+              throw new Error("Node does not support Data Layer API (blob.Get).\\nPublic RPCs usually only support consensus queries, please switch to Celenium API or use a local node.");
+            }
+            throw new Error(`RPC Error: ${msg}`);
+          }
+          blobData = json.result.data || json.result;
+        }
+
+        if (!blobData) throw new Error("RPC returned invalid data (Empty Response)");
+
+        document.getElementById('blobHex').value = blobData;
+        parseBlob(); // Auto trigger parse
+
+      } catch (e) {
+        errorBox.innerText = 'Fetch Failed:\\n' + e.message + '\\n(If public node fails, try Celenium API)';
+        errorBox.style.display = 'block';
+      } finally {
+        button.innerText = originalText;
+        button.disabled = false;
+      }
+    }
+
+    async function parseBlob() {
+      const input = document.getElementById('blobHex').value.trim();
+      const errorBox = document.getElementById('errorBoxBlob');
+      const results = document.getElementById('resultsBlob');
+      const resultCard = document.getElementById('resultCardBlob');
+      const decompressedArea = document.getElementById('decompressedHex');
+
+      if (decompressedArea) decompressedArea.value = '';
+      errorBox.style.display = 'none';
+      resultCard.style.display = 'none';
+
+      try {
+        let bytes;
+        // Detect Hex vs Base64 input
+        if (/^[0-9a-fA-F]+$/.test(input) && !input.includes('=')) {
+          bytes = hexToBytes(input);
+        } else {
+          bytes = Uint8Array.from(atob(input), c => c.charCodeAt(0));
+        }
+
+        // Protobuf Decoding (VersionedBlob)
+        // Field 1: version (uint32)
+        // Field 2: data (bytes)
+        // Field 3: withdrawal_root (bytes)
+
+        let offset = 0;
+        let info = { version: 0, wRoot: '', dataLen: 0, batch: null };
+
+        while (offset < bytes.length) {
+          const tagByte = bytes[offset++];
+          const fieldNum = tagByte >>> 3;
+          const wireType = tagByte & 0x07;
+
+          if (fieldNum === 1) { // version
+            const { val, size } = decodeVarIntPB(bytes, offset);
+            offset += size;
+            info.version = Number(val);
+          } else if (fieldNum === 2) { // withdrawal_root (Fixed: Tag 2 is Root)
+            const { val, size } = decodeVarIntPB(bytes, offset);
+            offset += size;
+            const len = Number(val);
+
+            info.wRoot = bytesToHex(bytes.slice(offset, offset + len));
+            offset += len;
+          } else if (fieldNum === 3) { // data (Fixed: Tag 3 is Data)
+            const { val, size } = decodeVarIntPB(bytes, offset);
+            offset += size;
+            const fieldLen = Number(val);
+
+            // Raw Blob Data (with KZG padding)
+            const rawData = bytes.slice(offset, offset + fieldLen);
+
+            // 1. Remove KZG Padding
+            const cleanBytes = [];
+            for (let i = 0; i < rawData.length; i += 32) {
+              if (i + 32 <= rawData.length) {
+                // Skip first byte (dummy 0x00), keep next 31
+                for (let j = 1; j < 32; j++) cleanBytes.push(rawData[i + j]);
+              }
+            }
+            const depadded = new Uint8Array(cleanBytes);
+            info.dataLen = depadded.length;
+
+            // 2. Parse Scroll Envelope (V7/V8)
+            // Structure: [Ver:1][Size:3][Comp:1][Body...]
+            if (depadded.length > 5) {
+              const batchVer = depadded[0];
+              // Use multiplication to avoid signed 32-bit issues
+              const payloadSize = (depadded[1] * 65536) + (depadded[2] * 256) + depadded[3];
+              const isCompressed = depadded[4];
+
+              // Debug info
+              console.log(`Envelope: Ver=${batchVer}, Size=${payloadSize}, Comp=${isCompressed}`);
+
+              // Truncation Check
+              const available = depadded.length - 5;
+              if (payloadSize > available) {
+                console.warn(`Data Truncated: Header claims ${payloadSize} bytes, but only ${available} available.`);
+              }
+
+              let payloadBody = depadded.slice(5, 5 + payloadSize);
+              let parseError = null;
+              let finalPayload = payloadBody;
+              let decompressedSize = payloadBody.length;
+
+              // 3. Decompression
+              if (isCompressed === 1) {
+                let success = false;
+                // Try zstd first (most likely for Scroll V8), then zlib
+                const formats = ['zstd', 'deflate', 'deflate-raw'];
+
+                // Debug: Peek first bytes
+                const peekHex = Array.from(payloadBody.slice(0, 8))
+                  .map(b => b.toString(16).padStart(2, '0')).join('');
+
+                for (const fmt of formats) {
+                  try {
+                    if (fmt === 'zstd') {
+                      if (typeof fzstd === 'undefined') {
+                        // If fzstd is not loaded for some reason, skip or throw
+                        throw new Error("Generic fzstd lib not loaded");
+                      }
+
+                      // Scroll V7/V8 Codec Logic: PREPEND ZSTD MAGIC NUMBER
+                      // The on-chain blob data STRIPS the Zstd magic header (4 bytes) to save space.
+                      // We must prepend [0x28, 0xb5, 0x2f, 0xfd] (Little Endian for 0xFD2FB528)
+                      // Source: crates/codec/src/decoding/v2/zstd.rs
+                      const magic = new Uint8Array([0x28, 0xb5, 0x2f, 0xfd]);
+                      const withHeader = new Uint8Array(magic.length + payloadBody.length);
+                      withHeader.set(magic);
+                      withHeader.set(payloadBody, magic.length);
+
+                      // fzstd specific call with reconstructed frame
+                      finalPayload = fzstd.decompress(withHeader);
+                      decompressedSize = finalPayload.length;
+                    } else {
+                      const ds = new DecompressionStream(fmt);
+                      const writer = ds.writable.getWriter();
+                      // Clone inputs to avoid stream locking issues on retry
+                      writer.write(new Uint8Array(payloadBody));
+                      writer.close();
+
+                      const reader = ds.readable.getReader();
+                      const chunks = [];
+                      while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        chunks.push(value);
+                      }
+
+                      // Combine chunks
+                      let totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
+                      let tmp = new Uint8Array(totalLen);
+                      let pos = 0;
+                      for (let c of chunks) { tmp.set(c, pos); pos += c.length; }
+
+                      finalPayload = tmp;
+                      decompressedSize = totalLen;
+                    }
+
+                    parseError = null; // Clear previous errors
+                    success = true;
+                    console.log(`Decompression success with ${fmt}`);
+                    break;
+                  } catch (e) {
+                    parseError = `[${fmt}] ${e.message}`;
+                  }
+                }
+
+                if (!success) {
+                  parseError = `Decompression Failed (Head:${peekHex}): ${parseError}`;
+                  console.warn(parseError);
+                }
+              }
+
+              // 4. Parse Payload Body
+              // [PrevHashes:64][StartBlock:8][BlockCount:2]
+              let l2Range = null;
+              if (!parseError && finalPayload.length >= 74) {
+                const dv = new DataView(finalPayload.buffer, finalPayload.byteOffset, finalPayload.byteLength);
+                const startBlock = dv.getBigUint64(64, false); // Big Endian
+                const count = dv.getUint16(72, false);
+
+                if (count > 0) {
+                  const endBlock = startBlock + BigInt(count) - 1n;
+                  l2Range = `${startBlock} -> ${endBlock} (${count} blocks)`;
+                }
+              }
+
+              if (decompressedArea) {
+                decompressedArea.value = bytesToHex(finalPayload);
+              }
+
+              info.batch = {
+                version: batchVer,
+                rawSize: info.dataLen,
+                payloadSize: payloadSize,
+                compressed: isCompressed === 1,
+                parseError,
+                l2Range,
+                finalSize: decompressedSize
+              };
+            }
+
+            offset += fieldLen;
+          } else {
+            // Skip unknown field
+            if (wireType === 2) {
+              const { val, size } = decodeVarIntPB(bytes, offset);
+              offset += size + Number(val);
+            } else if (wireType === 0) {
+              while (offset < bytes.length && (bytes[offset] & 0x80)) offset++;
+              offset++;
+            } else {
+              break;
+            }
+          }
+        }
+
+        const fields = [];
+        fields.push({ label: 'Wrapper Version', value: `V${info.version}` });
+        if (info.wRoot) fields.push({ label: 'Withdrawal Root', value: '0x' + info.wRoot });
+
+        if (info.batch) {
+          const b = info.batch;
+          let verStr = `V${b.version}`;
+          if (b.compressed) verStr += " (Compressed)";
+          fields.push({ label: 'Batch Version', value: verStr });
+
+          if (b.parseError) {
+            fields.push({ label: 'Payload Error', value: b.parseError });
+            fields.push({ label: 'Raw Size', value: `${b.rawSize} bytes` });
+          } else {
+            let sizeInfo = `${b.finalSize} bytes`;
+            if (b.compressed) sizeInfo += ` (Decompressed from ${b.payloadSize})`;
+            fields.push({ label: 'Payload Size', value: sizeInfo });
+
+            if (b.l2Range) {
+              fields.push({ label: 'L2 Block Range', value: b.l2Range });
+            }
+          }
+        } else {
+          fields.push({ label: 'Payload Size', value: `${info.dataLen} bytes` });
+        }
+
+        results.innerHTML = '';
+        fields.forEach(f => {
+          const div = document.createElement('div');
+          div.className = 'result-item animate-in';
+          div.innerHTML = `<div class="label">${f.label}</div><div class="value">${f.value}</div>`;
+          results.appendChild(div);
+        });
+
+        resultCard.style.display = 'block';
+
+      } catch (e) {
+        errorBox.innerText = 'Blob Parse Error: ' + e.message;
+        errorBox.style.display = 'block';
+      }
+    }
+
+    // Protobuf VarInt (LE 7-bit chunks)
+    function decodeVarIntPB(bytes, offset) {
+      let result = 0n;
+      let shift = 0n;
+      let size = 0;
+      while (true) {
+        if (offset + size >= bytes.length) break;
+        const b = BigInt(bytes[offset + size]);
+        result |= (b & 0x7Fn) << shift;
+        size++;
+        if ((b & 0x80n) === 0n) break;
+        shift += 7n;
+      }
+      return { val: result, size };
+    }
+
+    // Bitcoin VarInt (used for OP_RETURN)
+    function decodeVarInt(bytes, offset) {
+      if (offset >= bytes.length) return { val: 0n, size: 0 };
+      const first = bytes[offset];
+      if (first < 253) return { val: BigInt(first), size: 1 };
+      if (first === 253) return { val: BigInt(bytes[offset + 1] | (bytes[offset + 2] << 8)), size: 3 };
+      if (first === 254) {
+        const val = (bytes[offset + 1]) | (bytes[offset + 2] << 8) | (bytes[offset + 3] << 16) | (bytes[offset + 4] << 24);
+        return { val: BigInt(val >>> 0), size: 5 };
+      }
+      let val = 0n;
+      for (let i = 0; i < 8; i++) val |= BigInt(bytes[offset + 1 + i]) << BigInt(i * 8);
+      return { val, size: 9 };
+    }
+
+    function hexToBytes(hex) {
+      if (hex.startsWith('0x')) hex = hex.substring(2);
+      const bytes = [];
+      for (let c = 0; c < hex.length; c += 2) bytes.push(parseInt(hex.substr(c, 2), 16));
+      return bytes;
+    }
+
+    function bytesToHex(bytes) {
+      return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    function hexToBase64(hex) {
+      const bytes = hexToBytes(hex);
+      return btoa(String.fromCharCode.apply(null, bytes));
+    }
+  </script>
+</body>
+
+</html>
