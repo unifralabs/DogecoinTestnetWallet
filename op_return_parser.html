@@ -8,220 +8,228 @@
   <script src="https://unpkg.com/fzstd@0.1.1/umd/index.js"></script>
   <style>
     :root {
-      --primary: #ffb11a;
-      --bg: #1a1a1a;
-      --card-bg: #242424;
-      --text: #ddd;
-      --border: #444;
-      --input-bg: #111;
+      --primary: #333;
+      --bg: #ffffff;
+      --text: #222;
+      --border: #ddd;
+      --input-bg: #f9f9f9;
+      --label-bg: #f0f0f0;
+      --header-text: #111;
     }
 
     body {
-      font-family: system-ui, -apple-system, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background-color: var(--bg);
       color: var(--text);
       margin: 0;
-      padding: 16px;
+      padding: 20px; /* Increased from 10px for better edge spacing */
+      font-size: 13px;
     }
 
     .container {
-      max-width: 800px;
+      max-width: 100%;
       margin: 0 auto;
     }
 
     h1 {
-      color: var(--primary);
-      font-size: 1.4rem;
-      margin: 0 0 12px 0;
+      color: var(--header-text);
+      font-size: 1rem;
+      margin: 0 0 10px 0;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 4px;
     }
 
-    .card {
-      background: var(--card-bg);
-      border-radius: 6px;
-      padding: 12px;
-      border: 1px solid var(--border);
-      margin-bottom: 12px;
-      display: none;
-    }
-
-    .card.active {
-      display: block;
-    }
-
+    /* Compact Input Area */
     .input-group {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-bottom: 12px;
+      margin-bottom: 3px;
     }
-
-    .row-group {
-      display: flex;
-      gap: 8px;
-    }
-
-    .row-group .input-wrapper {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
+    
     label {
+      display: block;
+      color: #666;
+      font-size: 0.75rem;
       font-weight: 600;
-      color: var(--primary);
-      font-size: 0.85rem;
+      margin-bottom: 2px;
     }
 
-    .sub-label {
-      font-size: 0.7rem;
-      color: #888;
-    }
-
-    input[type="text"],
-    textarea {
+    textarea, input[type="text"] {
       background: var(--input-bg);
       border: 1px solid var(--border);
-      color: #fff;
-      padding: 6px 8px;
-      border-radius: 4px;
-      font-family: monospace;
-      font-size: 0.85rem;
+      color: #333;
+      padding: 0 8px; /* Horizontal padding only */
+      width: 100%;
+      box-sizing: border-box;
+      font-family: 'Fira Code', monospace;
+      font-size: 12px;
+      height: 28px; /* Explicit compact height */
+      line-height: 26px; /* Center text vertically */
+      border-radius: 2px;
     }
 
     textarea {
-      resize: vertical;
-      min-height: 50px;
+      min-height: 40px; 
+      padding: 4px 8px; /* Restore padding for textarea */
+      height: auto; /* Allow auto height for textarea */
+      line-height: 1.4;
     }
 
-    input:focus,
-    textarea:focus {
+    textarea:focus, input:focus {
       outline: none;
-      border-color: var(--primary);
+      border-color: #999;
+      background: #fff;
     }
 
     button {
-      background: var(--primary);
-      color: #000;
-      border: none;
-      padding: 6px 12px;
-      border-radius: 4px;
+      background: #000;
+      color: #fff;
+      border: 1px solid #000;
+      padding: 0 16px;
+      cursor: pointer;
+      font-size: 12px;
       font-weight: 600;
-      cursor: pointer;
-      font-size: 0.8rem;
+      border-radius: 2px;
+      height: 28px; /* Match input height */
+      margin-top: 0;
+      align-self: flex-end;
+      white-space: nowrap;
+      transition: all 0.2s;
+      line-height: 26px;
     }
-
+    
     button:hover {
-      opacity: 0.9;
-    }
-
-    button.secondary {
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--text);
-    }
-
-    button.secondary:hover {
-      border-color: var(--primary);
-      color: var(--primary);
-    }
-
-    .tabs {
-      display: flex;
-      gap: 6px;
-      margin-bottom: 12px;
-    }
-
-    .tab {
-      padding: 6px 12px;
       background: #333;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 0.8rem;
-      color: #888;
+      border-color: #333;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
-    .tab.active {
-      background: var(--primary);
-      color: #000;
+    button:active {
+      transform: translateY(0);
     }
 
+    /* Compact Key-Value Table Style */
     .result-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-      gap: 8px;
-      margin-top: 12px;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--border);
+      margin-top: 10px;
     }
 
     .result-item {
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid var(--border);
-      padding: 8px;
-      border-radius: 4px;
-      word-break: break-all;
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: transparent;
+      border-radius: 0;
+      box-shadow: none;
+      flex-direction: row;
+      align-items: stretch;
+    }
+
+    .result-item:last-child {
+      border-bottom: none;
     }
 
     .label {
-      font-size: 0.7rem;
-      color: #888;
-      margin-bottom: 4px;
-      text-transform: uppercase;
+      flex: 0 0 160px; /* Fixed width */
+      background: var(--label-bg);
+      color: #555;
+      font-weight: 600;
+      font-size: 12px;
+      padding: 4px 8px;
+      border-bottom: none;
+      border-right: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      text-transform: none;
     }
 
     .value {
-      font-size: 0.9rem;
-      font-family: monospace;
-      color: #fff;
+      flex: 1;
+      background: #fff;
+      color: #000;
+      font-family: 'Fira Code', monospace;
+      font-size: 12px;
+      padding: 4px 8px;
+      word-break: break-all;
+      line-height: 1.2;
     }
 
-    .highlight {
-      color: var(--primary);
+    /* Section Headers */
+    .section-header {
+      margin: 16px 0 8px 0;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.9rem;
       font-weight: bold;
+      color: var(--header-text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .section-number {
+      background: #444;
+      color: #fff;
+      width: 18px;
+      height: 18px;
+      font-size: 0.75rem;
+      border-radius: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .settings-panel {
+        background: transparent;
+        border: none;
+        padding: 0;
+        margin-bottom: 8px;
+    }
+    
+    .row-group {
+        display: flex;
+        gap: 8px;
+    }
+    
+    .sub-label {
+        font-size: 0.7rem;
+        color: #888;
     }
 
     .status-badge {
       display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
+      padding: 2px 6px;
+      border-radius: 2px;
       font-size: 0.75rem;
       font-weight: bold;
       margin-bottom: 8px;
     }
 
     .status-v1 {
-      background: #1a3e2a;
-      color: #4ade80;
+      background: #e6fffa;
+      color: #2c7a7b;
+      border: 1px solid #b2f5ea;
     }
 
     .status-v0 {
-      background: #3e2a1a;
-      color: #fbbf24;
+      background: #fffaf0;
+      color: #c05621;
+      border: 1px solid #fbd38d;
     }
 
     .error-msg {
-      color: #ff4d4d;
-      background: rgba(255, 77, 77, 0.1);
+      color: #c53030;
+      background: #fff5f5;
       padding: 8px;
-      border-radius: 4px;
+      border-radius: 2px;
       margin-bottom: 12px;
       display: none;
-      border: 1px solid #ff4d4d;
+      border: 1px solid #feb2b2;
       font-size: 0.85rem;
     }
 
-    .settings-panel {
-      background: rgba(0, 0, 0, 0.2);
-      padding: 10px;
-      border-radius: 4px;
-      margin-bottom: 12px;
-      border: 1px dashed var(--border);
-    }
-
     footer {
-      color: #555;
-      font-size: 0.75rem;
-      padding: 12px 0;
-      text-align: center;
+        display: none; 
     }
   </style>
 </head>
@@ -231,13 +239,13 @@
   <div class="container">
     <h1>DogeOS Protocol Parser</h1>
 
-    <div class="tabs">
-      <div id="tab-opr" class="tab active" onclick="switchTab('opr')">1. OP_RETURN Parser</div>
-      <div id="tab-blob" class="tab" onclick="switchTab('blob')">2. DA Blob Inspector</div>
+    <!-- OP_RETURN Section -->
+    <div class="section-header">
+      <div class="section-number">1</div>
+      <div>OP_RETURN Parser</div>
     </div>
 
-    <!-- OP_RETURN Card -->
-    <div id="card-opr" class="card active">
+    <div id="card-opr">
       <div class="input-group">
         <label>Input Settlement Transaction OP_RETURN Content</label>
         <textarea id="opReturnHex" placeholder="6a... (Hex)"></textarea>
@@ -247,14 +255,17 @@
       <div id="resultCardOpr" style="display: none; margin-top: 30px;">
         <div id="versionBadge" class="status-badge" style="display: none;"></div>
         <div id="resultsOpr" class="result-grid"></div>
-        <div style="margin-top:20px; text-align:right;">
-          <button class="secondary" onclick="jumpToBlobTab()">→ Fetch DA Blob</button>
-        </div>
+        <!-- Button removed: Auto-fill is now automatic -->
       </div>
     </div>
 
-    <!-- DA Blob Card -->
-    <div id="card-blob" class="card">
+    <!-- DA Blob Section -->
+    <div class="section-header" style="margin-top: 40px;">
+      <div class="section-number">2</div>
+      <div>DA Blob Inspector</div>
+    </div>
+
+    <div id="card-blob">
       <!-- Settings Panel -->
       <div class="settings-panel">
         <label style="margin-bottom:10px; display:block;">Celestia Node Configuration</label>
@@ -288,16 +299,16 @@
       <div class="input-group">
         <label>Fetch Parameters (Defaults for Mocha Testnet)</label>
         <div class="row-group">
+          <button onclick="fetchFromCelestia()" style="margin-top: auto;">Remote Fetch</button>
           <div class="input-wrapper">
             <span class="sub-label">Celestia Height</span>
-            <input type="text" id="targetHeight" placeholder="12345" value="9806756">
+            <input type="text" id="targetHeight" placeholder="12345" value="">
           </div>
           <div class="input-wrapper" style="flex: 2;">
             <span class="sub-label">Commitment (Base64)</span>
             <input type="text" id="targetCommitment" placeholder="Hash..."
               value="">
           </div>
-          <button onclick="fetchFromCelestia()" style="margin-top: auto;">Remote Fetch</button>
         </div>
       </div>
 
@@ -315,7 +326,7 @@
         <div class="input-group" style="margin-top: 20px;">
           <label>Decompressed Data (Hex)</label>
           <textarea id="decompressedHex" readonly
-            style="color: #ababae; font-family: 'Fira Code', monospace; min-height: 120px;"></textarea>
+            style="font-family: 'Fira Code', monospace; min-height: 120px;"></textarea>
         </div>
       </div>
     </div>
@@ -329,18 +340,13 @@
     // Global state to store parsed OP_RETURN data for jumping
     let lastOprData = null;
 
-    function switchTab(tab) {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.card').forEach(c => c.classList.remove('active'));
-      document.getElementById(`tab-${tab}`).classList.add('active');
-      document.getElementById(`card-${tab}`).classList.add('active');
-    }
-
     function jumpToBlobTab() {
       if (!lastOprData) return;
-      switchTab('blob');
       document.getElementById('targetHeight').value = lastOprData.celHeight;
       document.getElementById('targetCommitment').value = lastOprData.daCommitmentB64;
+      
+      // Smooth scroll to blob section
+      document.getElementById('card-blob').scrollIntoView({ behavior: 'smooth' });
     }
 
     function autoConvertNamespace() {
@@ -441,6 +447,10 @@
         versionBadge.innerText = `Protocol: V${version}`;
         versionBadge.className = `status-badge status-v${version}`;
         versionBadge.style.display = 'inline-block';
+
+        // Auto-fill DA Blob Inspector fields
+        if (celHeight) document.getElementById('targetHeight').value = celHeight;
+        if (daHashB64) document.getElementById('targetCommitment').value = daHashB64;
 
       } catch (e) {
         errorBox.innerText = 'Parse Error: ' + e.message;
