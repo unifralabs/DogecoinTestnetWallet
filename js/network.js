@@ -1,130 +1,140 @@
+const ELECTRS_API_BASE = 'https://doge-electrs-testnet-demo.qed.me';
+const REQUEST_TIMEOUT_MS = 15000;
+
 let useElectrs = true;
 let useElectrsProxy = false;
 
-function blockBookApiV2() {
-    return 'https://blockbook.qiaoxiaorui.org/api/v2';
+async function fetchFromElectrs(path, options = {}, retries = 2) {
+    let lastError;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+        try {
+            const response = await fetch(`${ELECTRS_API_BASE}${path}`, {
+                ...options,
+                signal: controller.signal
+            });
+
+            if ((response.status === 429 || response.status >= 500) && attempt < retries) {
+                await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1)));
+                continue;
+            }
+
+            return response;
+        } catch (error) {
+            lastError = error;
+            if (attempt === retries) {
+                throw error;
+            }
+            await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1)));
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    }
+
+    throw lastError;
+}
+
+async function getResponseError(response) {
+    const body = (await response.text()).trim();
+    return body || `${response.status} ${response.statusText}`;
 }
 
 //@ts-check
 async function fetchBalance(address) {
     try {
-        const baseUrl = blockBookApiV2();
-        let response, data;
-        const apiUrl = `${baseUrl}/address/${address}`;
-        response = await fetch(apiUrl);
-        if (response.ok) {
-            data = await response.json();
-            return {
-                balance: data.balance
-            };
+        const response = await fetchFromElectrs(`/address/${encodeURIComponent(address)}`);
+        if (!response.ok) {
+            throw new Error('API query failed: ' + await getResponseError(response));
         }
-        throw new Error('API query failed: ' + response.status);
+
+        const data = await response.json();
+        const confirmedBalance = data.chain_stats.funded_txo_sum - data.chain_stats.spent_txo_sum;
+        const unconfirmedBalance = data.mempool_stats.funded_txo_sum - data.mempool_stats.spent_txo_sum;
+
+        return {
+            // Keep the existing Blockbook-compatible shape used by the UI.
+            balance: String(confirmedBalance),
+            unconfirmedBalance: String(unconfirmedBalance)
+        };
     } catch (error) {
         throw new Error('Failed to fetch balance: ' + error.message);
     }
 }
 
 async function getUTXOs(address) {
-    try {
-        const baseUrl = blockBookApiV2();
-        const apiUrl = `${baseUrl}/utxo/${address}`;
-
-        const response = await fetch(apiUrl);
-        if (response.ok) {
-            const utxos = await response.json();
-            // Filter for confirmed UTXOs with a value, then map to convert value to an integer.
-            return utxos
-                .filter(utxo => {
-                    const isConfirmed = utxo.confirmations > 0;
-                    const hasValue = utxo.value && parseInt(utxo.value, 10) > 0;
-                    return isConfirmed && hasValue;
-                })
-                .map(utxo => ({
-                    ...utxo,
-                    value: parseInt(utxo.value, 10)
-                }));
-        }
-        throw new Error('Failed to get UTXO: ' + response.status);
-    } catch (error) {
-        throw error;
+    const response = await fetchFromElectrs(`/address/${encodeURIComponent(address)}/utxo`);
+    if (!response.ok) {
+        throw new Error('Failed to get UTXOs: ' + await getResponseError(response));
     }
+
+    const utxos = await response.json();
+    return utxos
+        .filter(utxo => utxo.status?.confirmed && Number(utxo.value) > 0)
+        .map(utxo => ({
+            ...utxo,
+            // Preserve the fields expected by the existing transaction builder.
+            value: Number(utxo.value),
+            confirmations: 1,
+            height: utxo.status.block_height
+        }));
 }
 
 async function broadcastTransaction(txHex) {
     try {
-        // 使用 Blockbook API
-        const baseUrl = "https://blockbook.qiaoxiaorui.org/api/v2";
-        console.log('Broadcasting transaction via Blockbook:txHex.length=', txHex.length);
-        
-        // Blockbook 的 sendtx 接口（POST 方式）
-        const response = await fetch(`${baseUrl}/sendtx/`, {
+        console.log('Broadcasting transaction via Dogecoin Testnet Electrs: txHex.length=', txHex.length);
+
+        // Do not automatically retry a broadcast: the first request may have reached the node.
+        const response = await fetchFromElectrs('/tx', {
             method: 'POST',
             headers: {
-                'Content-Type': 'text/plain',
+                'Content-Type': 'text/plain'
             },
             body: txHex
-        });
+        }, 0);
 
-        // 先解析响应体（无论状态码如何）
-        const data = await response.json();
-        
-        // 检查是否有错误（Blockbook 可能返回 200 状态码但包含错误信息）
-        if (data.error) {
-            const errorMsg = data.error.message || JSON.stringify(data.error);
-            console.error('Blockbook broadcast error:', errorMsg);
-            throw new Error(`Blockbook error: ${errorMsg}`);
-        }
-        
-        // 检查是否有成功结果
-        if (data.result) {
-            console.log('✓ Transaction broadcasted successfully, TXID:', data.result);
-            return data.result; // 返回 txid
-        }
-        
-        // HTTP 错误状态码
+        const responseText = (await response.text()).trim();
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status} ${response.statusText}: ${JSON.stringify(data)}`);
+            throw new Error(responseText || `HTTP ${response.status} ${response.statusText}`);
         }
-        
-        // 未知响应格式
-        console.error('Unexpected Blockbook response:', data);
-        throw new Error('Unexpected response format from Blockbook: ' + JSON.stringify(data));
-        
+
+        if (!/^[0-9a-f]{64}$/i.test(responseText)) {
+            throw new Error('Unexpected broadcast response: ' + responseText);
+        }
+
+        console.log('✓ Transaction broadcasted successfully, TXID:', responseText);
+        return responseText;
     } catch (error) {
-        // 如果是网络错误或 JSON 解析错误
-        if (error.message.includes('Blockbook error:')) {
-            throw error; // 已经是格式化的错误，直接抛出
-        }
         throw new Error('Failed to broadcast transaction: ' + error.message);
     }
 }
 
 async function fetchMempoolTransactions(address) {
     try {
-        const baseUrl = blockBookApiV2();
-        const apiUrl = `${baseUrl}/address/${address}?details=txids`;
-
-        const response = await fetch(apiUrl);
+        const response = await fetchFromElectrs(`/address/${encodeURIComponent(address)}/txs/mempool`);
         if (response.ok) {
-            //return await response.json(); // Returns an array of transaction objects
             const data = await response.json();
-            if (data.unconfirmedTxs == 0) {
-                return [];
-            }
-            let pendingTransactions = []
-            for (let i = 0; i < data.transactions.length; i++) {
-                if (data.transactions[i].confirmations == 0) {
-                    pendingTransactions.push(data.transactions[i])
-                }
-            }
-            return pendingTransactions;
+            return Array.isArray(data)
+                ? data.filter(tx => !tx.status?.confirmed)
+                : [];
         }
         console.warn(`Failed to fetch mempool transactions for ${address}: ${response.status}`);
-        return []; // Return empty array on failure to allow graceful handling
+        return [];
     } catch (error) {
         console.error(`Error fetching mempool transactions for ${address}:`, error);
-        return []; // Return empty array on error
+        return [];
     }
+}
+
+async function fetchTransaction(txid) {
+    const response = await fetchFromElectrs(`/tx/${encodeURIComponent(txid)}`);
+    if (!response.ok) {
+        throw new Error('Failed to get transaction: ' + await getResponseError(response));
+    }
+
+    return await response.json();
 }
 
 async function getVerifiedUTXOs(address) {
@@ -141,10 +151,10 @@ async function getVerifiedUTXOs(address) {
 
         const cache = JSON.parse(stored);
         const now = Date.now();
-        const fifteenMinutesAgo = now - 24 * 60 * 60 * 1000;
+        const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
 
         const spentIds = new Set(
-            cache.filter(item => item.timestamp > fifteenMinutesAgo).map(item => item.id)
+            cache.filter(item => item.timestamp > twentyFourHoursAgo).map(item => item.id)
         );
 
         return utxos.filter(utxo => !spentIds.has(`${utxo.txid}:${utxo.vout}`));
@@ -160,6 +170,7 @@ export {
     getVerifiedUTXOs,
     broadcastTransaction,
     fetchMempoolTransactions,
+    fetchTransaction,
     useElectrs,
     useElectrsProxy
 };

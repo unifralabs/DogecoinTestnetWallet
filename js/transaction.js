@@ -1,5 +1,5 @@
 import { wallet } from './wallet.js';
-import { getUTXOs, getVerifiedUTXOs, broadcastTransaction, fetchMempoolTransactions, fetchBalance } from './network.js';
+import { getUTXOs, getVerifiedUTXOs, broadcastTransaction, fetchMempoolTransactions, fetchBalance, fetchTransaction } from './network.js';
 import { sha256Double } from './crypto-utils.js';
 import { saveBroadcastedTxToDB, getBroadcastedTxsFromDB, getPendingTxsFromDB, updateTxStatusInDB } from './storage.js';
 import { showAlert, startSendLoading, stopSendLoading, updateWalletUI } from './ui.js'; // Added updateWalletUI for balance refresh
@@ -231,7 +231,7 @@ function viewPendingTransactions() { // Made synchronous as it reads from memory
         return;
     }
     pendingList.innerHTML = dbPendingTxs.map(tx =>
-        `<li>TXID: <a href="https://blockbook.qiaoxiaorui.org/tx/${tx.txid}" target="_blank">${tx.txid.substring(0, 10)}...</a> - Send ${tx.amount} DOGE to ${tx.recipient.substring(0, 10)}... - Status: ${tx.status}</li>`
+        `<li>TXID: <a href="https://doge-testnet-explorer.qed.me/tx/${tx.txid}" target="_blank">${tx.txid.substring(0, 10)}...</a> - Send ${tx.amount} DOGE to ${tx.recipient.substring(0, 10)}... - Status: ${tx.status}</li>`
     ).join('');
 }
 
@@ -267,7 +267,7 @@ function viewBroadcastedTransactions() { // Made synchronous
 
     dbConfirmedTxs.forEach(tx => {
         const row = broadcastedTableBody.insertRow();
-        row.insertCell().innerHTML = `<a href="https://sochain.com/tx/DOGETEST/${tx.txid}" target="_blank" title="${tx.txid}">${tx.txid.substring(0, 10)}...</a>`;
+        row.insertCell().innerHTML = `<a href="https://doge-testnet-explorer.qed.me/tx/${tx.txid}" target="_blank" title="${tx.txid}">${tx.txid.substring(0, 10)}...</a>`;
         row.insertCell().textContent = tx.amount.toFixed(8);
         row.insertCell().innerHTML = `<span title="${tx.recipient}">${tx.recipient.substring(0, 10)}...</span>`;
         row.insertCell().innerHTML = `<span class="transaction-status status-${tx.status}">${tx.status}</span>`;
@@ -759,7 +759,7 @@ async function sendTransaction() {
 
 function openInBrowser() {
     if (wallet.address) {
-        const url = `https://sochain.com/address/DOGETEST/${wallet.address}`;
+        const url = `https://doge-testnet-explorer.qed.me/address/${wallet.address}`;
         window.open(url, '_blank');
     } else {
         showAlert('Please select or generate wallet first', 'error');
@@ -838,16 +838,13 @@ async function checkPendingTransactionsStatus() {
 
     for (const tx of pendingToCheck) {
         try {
-            const electrsBase = 'https://blockbook.qiaoxiaorui.org/api/v2';
-            const apiUrl = `${electrsBase}/tx/${tx.txid}`;
-            const response = await fetch(apiUrl);
-            const txData = response.ok ? await response.json() : null;
+            const txData = await fetchTransaction(tx.txid);
 
-            if (txData && txData.confirmations > 0) {
+            if (txData.status?.confirmed) {
                 const newStatusDetails = {
                     status: 'confirmed',
-                    block_height: txData.blockHeight,
-                    block_time: txData.blockTime
+                    block_height: txData.status.block_height,
+                    block_time: txData.status.block_time
                 };
                 // The key for IndexedDB is an array [address, txid]
                 const dbKey = [wallet.address, tx.txid];
