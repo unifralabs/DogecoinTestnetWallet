@@ -2,6 +2,8 @@
 
 A browser-based wallet for Dogecoin Testnet. It can generate and import wallets, query balances and UTXOs, build and sign transactions locally, broadcast transactions, and attach optional `OP_RETURN` data.
 
+**Live demo:** [unifralabs.github.io/DogecoinTestnetWallet](https://unifralabs.github.io/DogecoinTestnetWallet/)
+
 > This project is for development and testing only. Testnet coins have no monetary value. Never use a mainnet private key in this wallet.
 
 ## Features
