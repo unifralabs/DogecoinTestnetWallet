@@ -514,3 +514,10 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
     .address-container .address { flex: 1 1 100%; min-width: 0; overflow-wrap: anywhere; }
     .network-status-section .info-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+.broadcast-settings { border: 1px solid #b6cee2; border-radius: 6px; padding: 12px; margin: 16px 0; background: #f0f7fd; }
+.broadcast-settings summary { cursor: pointer; font-weight: bold; margin-bottom: 10px; }
+.broadcast-settings input { min-width: 0; }
+.broadcast-settings .transaction-actions { margin-top: 12px; }
+#broadcastSettingsStatus { overflow-wrap: anywhere; }
+#broadcastUrl[aria-invalid="true"] { border-color: #c53030; }

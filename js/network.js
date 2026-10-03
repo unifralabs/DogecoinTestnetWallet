@@ -1,3 +1,6 @@
+import { getBroadcastSettings } from './broadcast-settings.js';
+import { broadcastSignedTransaction } from './broadcast.js';
+
 const ELECTRS_API_BASE = 'https://doge-electrs-testnet-demo.qed.me';
 const REQUEST_TIMEOUT_MS = 15000;
 
@@ -82,30 +85,9 @@ async function getUTXOs(address) {
         }));
 }
 
-async function broadcastTransaction(txHex) {
+async function broadcastTransaction(txHex, settings = getBroadcastSettings()) {
     try {
-        console.log('Broadcasting transaction via Dogecoin Testnet Electrs: txHex.length=', txHex.length);
-
-        // Do not automatically retry a broadcast: the first request may have reached the node.
-        const response = await fetchFromElectrs('/tx', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'text/plain'
-            },
-            body: txHex
-        }, 0);
-
-        const responseText = (await response.text()).trim();
-        if (!response.ok) {
-            throw new Error(responseText || `HTTP ${response.status} ${response.statusText}`);
-        }
-
-        if (!/^[0-9a-f]{64}$/i.test(responseText)) {
-            throw new Error('Unexpected broadcast response: ' + responseText);
-        }
-
-        console.log('✓ Transaction broadcasted successfully, TXID:', responseText);
-        return responseText;
+        return await broadcastSignedTransaction(txHex, settings);
     } catch (error) {
         throw new Error('Failed to broadcast transaction: ' + error.message);
     }

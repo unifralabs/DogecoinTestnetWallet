@@ -225,6 +225,28 @@
                             placeholder="Enter data content&#10;String mode: Hello Dogecoin!&#10;Hexadecimal mode: 48656c6c6f20446f6765636f696e21&#10;Maximum 80 bytes"></textarea>
                         <small id="opReturnHelp">OP_RETURN allows including arbitrary data in transactions, permanently recorded on blockchain</small>
                     </div>
+                    <details class="broadcast-settings" open>
+                        <summary>Dogecoin RPC</summary>
+                        <div class="form-group">
+                            <label for="broadcastUrl">Dogecoin RPC URL:</label>
+                            <input id="broadcastUrl" type="url" spellcheck="false" autocomplete="off"
+                                placeholder="https://your-dogecoin-testnet-rpc/" aria-describedby="broadcastUrlHelp broadcastSettingsStatus">
+                            <p id="broadcastUrlHelp" class="help-text">Broadcasts using Dogecoin JSON-RPC 1.0: sendrawtransaction with the signed transaction hex.</p>
+                        </div>
+                        <details>
+                            <summary>Authentication (optional)</summary>
+                            <label for="broadcastAuthorization">Authorization header:</label>
+                            <input id="broadcastAuthorization" type="password" autocomplete="off" spellcheck="false"
+                                placeholder="Basic base64(rpcuser:rpcpassword)">
+                            <p class="help-text">For RPC HTTP authentication. Used for this page session only; this header is not saved.</p>
+                        </details>
+                        <div class="transaction-actions">
+                            <button id="saveBroadcastSettingsBtn" type="button">Save RPC URL</button>
+                            <button id="resetBroadcastSettingsBtn" type="button" class="copy-btn">Clear Saved RPC</button>
+                        </div>
+                        <p id="broadcastSettingsStatus" role="status" aria-live="polite" class="help-text"></p>
+                        <p class="help-text">Use a Dogecoin testnet RPC endpoint that allows browser requests (CORS). An HTTPS wallet page needs an HTTPS endpoint. This setting changes broadcasting only; balance and transaction-status queries still use Electrs.</p>
+                    </details>
                     <div class="transaction-actions">
                         <button id="signTransactionBtn" type="button">Sign Only — Export Hex</button>
                         <button id="sendTransactionBtn" type="button">Sign &amp; Broadcast</button>

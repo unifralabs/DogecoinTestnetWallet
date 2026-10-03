@@ -1,3 +1,4 @@
+import { getBroadcastSettings } from './broadcast-settings.js';
 import { dogeToKoinu } from './custom-utxos.js';
 import { isCustomUtxoMode, readCustomUtxos, clearSignedResult, showSignedResult } from './custom-utxo-ui.js';
 import { wallet } from './wallet.js';
@@ -569,7 +570,9 @@ async function sendTransaction({ broadcast = true } = {}) {
         return;
     }
     let amountSatoshis;
+    let broadcastSettings;
     try {
+        if (broadcast) broadcastSettings = getBroadcastSettings();
         const exact = dogeToKoinu(document.getElementById('amount').value);
         if (exact > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('Send amount is too large.');
         amountSatoshis = Number(exact);
@@ -774,7 +777,7 @@ async function sendTransaction({ broadcast = true } = {}) {
             opReturnData: opReturnData || null
         });
 
-        const broadcastedTxid = await broadcastTransaction(rawTxHex);
+        const broadcastedTxid = await broadcastTransaction(rawTxHex, broadcastSettings);
         // After successful broadcast, immediately cache the spent UTXOs locally
         addSpentUTXOsToCache(actualSelectedUtxos);
 

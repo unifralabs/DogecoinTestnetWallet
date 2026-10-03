@@ -1,3 +1,4 @@
+import { initializeBroadcastSettings } from './broadcast-settings.js';
 import { initializeCustomUtxoUI } from './custom-utxo-ui.js';
 import { initializeCrypto } from './crypto-utils.js';
 import { wallet, generateWallet, loadWallet, deleteCurrentWallet, importWallet, clearCurrentWallet } from './wallet.js';
@@ -139,6 +140,7 @@ function updateAutoRefreshStatus() {
 function addEventListeners() {
     console.log('Setting up event listeners...');
     initializeCustomUtxoUI(() => wallet, createScriptPubKey);
+    initializeBroadcastSettings();
 
     const generateWalletBtn = document.getElementById('generateWalletBtn');
     if (generateWalletBtn) {

@@ -112,7 +112,7 @@ Available in both `index.html` and `wallet-v2.html`:
 2. Under **UTXO source**, choose **Custom — paste or import UTXOs**.
 3. Paste JSON or select a JSON file, then click **Validate & Preview UTXOs**.
 4. Enter the recipient and DOGE amount (for example `10000`).
-5. Click **Sign Only — Export Hex** to sign locally and copy/download the signed transaction. This does not broadcast, reserve inputs, update transaction history, or mark inputs as spent. **Sign & Broadcast** retains the existing Electrs broadcast flow.
+5. Click **Sign Only — Export Hex** to sign locally and copy/download the signed transaction. This does not broadcast, reserve inputs, update transaction history, or mark inputs as spent. **Sign & Broadcast** sends to the configured broadcast endpoint.
 
 Custom mode spends **all supplied UTXOs** and returns remaining value to the current wallet after the recipient amount, network fee, and any configured L2Scan fee. To choose a subset, include only that subset in the JSON. It does not fetch UTXOs or depend on the displayed API balance; background balance/status requests may still run.
 
@@ -129,7 +129,7 @@ Only UTXO inputs are imported from a prepare response. Its outputs, fee, and sig
 
 Import validation is local. It cannot verify that supplied values match the blockchain or that outputs remain unspent. Use fresh data from a trusted source. Private keys remain in the existing browser wallet and are not included in exported transaction JSON. Exports contain `rawTxHex`, a locally computed `txid`, the selected inputs, and exact amount/fee/change values in koinu.
 
-For external broadcasting, copy `rawTxHex` into the broadcaster's signed-transaction field. The existing Send button still uses Electrs; importing Crypto APIs data does not change the broadcast provider or require an API key in this page.
+For external broadcasting, copy `rawTxHex` into the broadcaster's signed-transaction field. The Sign & Broadcast button uses the Dogecoin RPC URL configured in the Dogecoin RPC panel. Importing Crypto APIs UTXOs does not change that setting.
 
 ### Tests
 
@@ -140,3 +140,23 @@ node --test tests/*.test.mjs
 ```
 
 Tests cover JSON formats, precision and invalid-input handling, recipient checks, insufficient funds, dust change, and independent OpenSSL verification of signatures for a 10,000 DOGE transaction with a large change output. No live coins are used or broadcast by the tests.
+
+
+## Configurable Dogecoin RPC
+
+Both wallet pages have a **Dogecoin RPC** panel. Enter the complete URL of your Dogecoin testnet RPC node or gateway. Broadcasting always uses native Dogecoin JSON-RPC, with this POST body (`Content-Type: application/json`):
+
+```json
+{"jsonrpc":"1.0","id":"dogecoin-wallet","method":"sendrawtransaction","params":["<signed hex>"]}
+```
+
+The transaction ID is read from `result`; RPC rejections display `error.code` and `error.message`. There is no REST broadcast mode or default third-party broadcast URL.
+
+- **Save RPC URL** stores the URL in this site's `localStorage`. It is restored after refresh or reopening the same browser/site, and shared by the normal and bridge pages. Localhost and the hosted GitHub Pages site have separate browser storage.
+- **Clear Saved RPC** removes the saved URL. Existing saved JSON-RPC URLs are retained; legacy Electrs broadcast settings require entering a new RPC URL.
+- Broadcasting uses the current form URL even before Save; Save controls whether it survives reload. A missing or invalid RPC URL stops the send before signing. **Sign Only** does not require an RPC URL.
+- Optional authentication accepts an `Authorization` header value such as `Basic base64(rpcuser:rpcpassword)`. The header is held only in the form and is not persisted. URL paths and query parameters *are* saved, including any provider token embedded in the URL.
+
+The endpoint must serve **Dogecoin testnet** and permit this page's browser origin via CORS, including JSON/Authorization headers where applicable. When serving the wallet over HTTPS, use an HTTPS RPC endpoint; browsers may block HTTP endpoints as mixed content. A private Dogecoin Core node typically needs a suitable CORS-enabled gateway for browser access.
+
+Only broadcast routing changes. Balance, UTXO discovery, block information, and transaction-status polling continue to use the existing Electrs service. Custom UTXO import and Sign Only still work without that UTXO service. Broadcasts use one attempt with a 15-second timeout and no automatic retry or fallback provider; a timeout can happen after acceptance, so check the transaction ID before retrying.
