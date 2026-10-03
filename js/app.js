@@ -1,8 +1,9 @@
+import { initializeCustomUtxoUI } from './custom-utxo-ui.js';
 import { initializeCrypto } from './crypto-utils.js';
-import { wallet, generateWallet, loadWallet, deleteCurrentWallet, importWallet } from './wallet.js';
+import { wallet, generateWallet, loadWallet, deleteCurrentWallet, importWallet, clearCurrentWallet } from './wallet.js';
 import { fetchBalance, useElectrs, useElectrsProxy } from './network.js';
 import { showAlert, updateWalletUI, copyToClipboard } from './ui.js';
-import { testConnection, sendTransactionWithUi, openInBrowser, viewPendingTransactions, viewBroadcastedTransactions, refreshWalletTransactionHistory, loadPersistedBroadcastedTransactions, checkPendingTransactionsStatus } from './transaction.js';
+import { createScriptPubKey, signTransactionWithUi, testConnection, sendTransactionWithUi, openInBrowser, viewPendingTransactions, viewBroadcastedTransactions, refreshWalletTransactionHistory, loadPersistedBroadcastedTransactions, checkPendingTransactionsStatus } from './transaction.js';
 import { updateWalletList } from './storage.js';
 
 let autoRefreshInterval = null;
@@ -137,6 +138,7 @@ function updateAutoRefreshStatus() {
 
 function addEventListeners() {
     console.log('Setting up event listeners...');
+    initializeCustomUtxoUI(() => wallet, createScriptPubKey);
 
     const generateWalletBtn = document.getElementById('generateWalletBtn');
     if (generateWalletBtn) {
@@ -211,6 +213,7 @@ function addEventListeners() {
     document.getElementById('testConnectionBtn')?.addEventListener('click', () => testConnection());
     const transactionButtons = {
         sendTransactionBtn: sendTransactionWithUi,
+        signTransactionBtn: signTransactionWithUi,
         viewInBrowser: (e) => {
             e.preventDefault();
             openInBrowser();

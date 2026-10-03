@@ -483,3 +483,34 @@ select {
     flex-basis: 120px; /* Give input box a base width */
     flex-grow: 0; /* Don't allow input box to grow */
 }
+
+/* Custom UTXO input and local signing results */
+[hidden] { display: none !important; }
+.custom-utxo-panel, .signed-transaction-panel {
+    padding: 12px;
+    margin: 12px 0;
+    border: 1px solid #b6cee2;
+    border-radius: 6px;
+    background: #f0f7fd;
+}
+.help-text { font-size: 12px; color: #475569; line-height: 1.5; }
+#customUtxos, #signedTransactionHex { font-family: monospace; resize: vertical; }
+#customUtxos[aria-invalid="true"] { border-color: #c53030; }
+#customUtxoSummary { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.utxo-table-scroll { overflow-x: auto; }
+#customUtxoRows td:first-child { max-width: 240px; overflow-wrap: anywhere; font-family: monospace; }
+.signed-summary { white-space: pre-line; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
+.main-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+@media (max-width: 768px) {
+    .main-grid { grid-template-columns: minmax(0, 1fr); }
+    .form-group.horizontal { flex-wrap: wrap; }
+}
+
+.transaction-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+@media (max-width: 768px) {
+    .wallet-controls, .address-container, .balance-container { flex-wrap: wrap; }
+    .wallet-controls button { flex: 1 1 auto; }
+    .address-container .address { flex: 1 1 100%; min-width: 0; overflow-wrap: anywhere; }
+    .network-status-section .info-grid { grid-template-columns: minmax(0, 1fr); }
+}

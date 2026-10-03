@@ -103,3 +103,40 @@ Testnet coins can be requested from [faucet.doge.toys](https://faucet.doge.toys/
 ## Public-service notice
 
 The QED endpoint is a community-operated public service and does not provide a commercial SLA. For production-like testing, consider operating a private Electrs/Esplora or Blockbook instance and changing `ELECTRS_API_BASE` in `js/network.js`.
+
+## Custom UTXOs and signing without the UTXO service
+
+Available in both `index.html` and `wallet-v2.html`:
+
+1. Generate or import the wallet that owns the outputs.
+2. Under **UTXO source**, choose **Custom — paste or import UTXOs**.
+3. Paste JSON or select a JSON file, then click **Validate & Preview UTXOs**.
+4. Enter the recipient and DOGE amount (for example `10000`).
+5. Click **Sign Only — Export Hex** to sign locally and copy/download the signed transaction. This does not broadcast, reserve inputs, update transaction history, or mark inputs as spent. **Sign & Broadcast** retains the existing Electrs broadcast flow.
+
+Custom mode spends **all supplied UTXOs** and returns remaining value to the current wallet after the recipient amount, network fee, and any configured L2Scan fee. To choose a subset, include only that subset in the JSON. It does not fetch UTXOs or depend on the displayed API balance; background balance/status requests may still run.
+
+Supported input shapes:
+
+- An array of `{ "txid", "vout", "value", "scriptPubKey" }` (Esplora-style `status` is also accepted).
+- Crypto APIs prepare response: `data.item.inputs`, or an object with `inputs` containing `{ "transactionId", "outputIndex", "satoshis", "script", "address" }`.
+- Crypto APIs unspent-output response: `data.items`, with `transactionId`, `index`, and `value.amount` as a DOGE decimal string.
+- A saved result containing `apiResponse.data.item.inputs`, such as `dogecoin-testnet-prepare-10000.json`.
+
+`value` and `satoshis` are **integer koinu**, not DOGE (`100000000` = `1 DOGE`). Use quoted integer strings for large amounts to avoid JSON number rounding. `scriptPubKey` is optional: if absent, the current wallet's P2PKH script is used. If present, it must match the current wallet. Duplicate outpoints, malformed values, foreign scripts/addresses, explicit spent/unavailable/unconfirmed flags, and recently broadcast inputs in the local cache are rejected. Only this wallet's P2PKH inputs are supported.
+
+Only UTXO inputs are imported from a prepare response. Its outputs, fee, and sighashes are **not reused**: the wallet rebuilds the transaction and signatures from the recipient, amount, optional data, and existing fee policy in this form. Check the exported recipient, fee, and change before broadcasting. The bridge page keeps its existing L2Scan fee settings.
+
+Import validation is local. It cannot verify that supplied values match the blockchain or that outputs remain unspent. Use fresh data from a trusted source. Private keys remain in the existing browser wallet and are not included in exported transaction JSON. Exports contain `rawTxHex`, a locally computed `txid`, the selected inputs, and exact amount/fee/change values in koinu.
+
+For external broadcasting, copy `rawTxHex` into the broadcaster's signed-transaction field. The existing Send button still uses Electrs; importing Crypto APIs data does not change the broadcast provider or require an API key in this page.
+
+### Tests
+
+With Node.js 22 or newer:
+
+```bash
+node --test tests/*.test.mjs
+```
+
+Tests cover JSON formats, precision and invalid-input handling, recipient checks, insufficient funds, dust change, and independent OpenSSL verification of signatures for a 10,000 DOGE transaction with a large change output. No live coins are used or broadcast by the tests.

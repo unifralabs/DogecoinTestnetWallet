@@ -1,3 +1,5 @@
+import { dogeToKoinu } from './custom-utxos.js';
+import { isCustomUtxoMode, readCustomUtxos, clearSignedResult, showSignedResult } from './custom-utxo-ui.js';
 import { wallet } from './wallet.js';
 import { getUTXOs, getVerifiedUTXOs, broadcastTransaction, fetchMempoolTransactions, fetchBalance, fetchTransaction } from './network.js';
 import { sha256Double } from './crypto-utils.js';
@@ -41,13 +43,16 @@ function createScriptPubKey(address) {
     const decoded = bs58.decode(address);
     const hex = decoded.map(b => b.toString(16).padStart(2, '0')).join('');
     console.log('Decoded hex:', hex);
+    if (decoded.length !== 25 || sha256Double(CryptoJS.enc.Hex.parse(hex.slice(0, 42))).toString().slice(0, 8) !== hex.slice(42)) {
+        throw new Error('Invalid address checksum.');
+    }
 
     // Check the version byte to determine address type
     const versionByte = hex.substring(0, 2);
     console.log('Version byte:', versionByte);
 
-    if (versionByte === '6f' || versionByte === '71') {
-        // Dogecoin testnet P2PKH (starts with 'n' or 'm')
+    if (versionByte === '71') {
+        // Dogecoin testnet P2PKH (version 0x71)
         const pubKeyHash = hex.substring(2, 42);
         console.log('P2PKH pubKeyHash:', pubKeyHash);
         return '76a914' + pubKeyHash + '88ac';
@@ -351,7 +356,7 @@ async function createActualTransaction(options) {
             vout: utxo.vout,
             scriptSig: '', // Will be filled after signing
             sequence: sequence,
-            scriptPubKeyToSpend: scriptPubKeyForInputs
+            scriptPubKeyToSpend: utxo.scriptPubKey || scriptPubKeyForInputs
         });
     });
     const inputCountHex = toCompactSizeBytes(inputs.length);
@@ -516,21 +521,40 @@ async function createActualTransaction(options) {
         finalTxHexParts.push(output.scriptPubKey);
     });
     finalTxHexParts.push(locktime);
-    return finalTxHexParts.join('');
+    return {
+        rawTxHex: finalTxHexParts.join(''),
+        feeKoinu: actualFeeSatoshis.toString(),
+        changeKoinu: finalChangeAmountSatoshis.toString()
+    };
 }
 
-async function sendTransactionWithUi() {
-    startSendLoading('Preparing transaction...');
+let transactionInProgress = false;
+
+async function runTransactionWithUi(broadcast) {
+    if (transactionInProgress) return;
+    transactionInProgress = true;
+    clearSignedResult();
+    startSendLoading(broadcast ? 'Preparing transaction...' : 'Signing locally...');
+    const signButton = document.getElementById('signTransactionBtn');
+    if (signButton) signButton.disabled = true;
     try {
-        await sendTransaction(); 
+        await sendTransaction({ broadcast });
     } finally {
+        transactionInProgress = false;
         stopSendLoading();
+        if (signButton) signButton.disabled = false;
     }
 }
 
-async function sendTransaction() {
-    //
+async function sendTransactionWithUi() {
+    return runTransactionWithUi(true);
+}
 
+async function signTransactionWithUi() {
+    return runTransactionWithUi(false);
+}
+
+async function sendTransaction({ broadcast = true } = {}) {
     if (!wallet.address || !wallet.privateKey) {
         showAlert('Please create or import wallet first', 'error');
         return;
@@ -544,7 +568,20 @@ async function sendTransaction() {
         showAlert('Please enter amount and recipient address', 'error');
         return;
     }
-    const amountSatoshis = Math.round(amount * 1e8);
+    let amountSatoshis;
+    try {
+        const exact = dogeToKoinu(document.getElementById('amount').value);
+        if (exact > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('Send amount is too large.');
+        amountSatoshis = Number(exact);
+        createScriptPubKey(recipientAddress);
+        if (l2scanFeeAddress) createScriptPubKey(l2scanFeeAddress);
+    } catch (error) {
+        showAlert(error.message, 'error');
+        return;
+    }
+    const senderAddress = wallet.address;
+    const senderPrivateKey = wallet.privateKey;
+    const customMode = isCustomUtxoMode();
 
     // Calculate L2Scan fee (0.3% of amount) only if address is provided
     let l2scanFeeAmount = 0;
@@ -561,7 +598,12 @@ async function sendTransaction() {
     const totalAmountNeededSatoshis = amountSatoshis + l2scanFeeSatoshis;
 
     try {
-        const utxos = await getVerifiedUTXOs(wallet.address);
+        const utxos = customMode
+            ? readCustomUtxos(senderAddress, createScriptPubKey(senderAddress))
+            : await getVerifiedUTXOs(senderAddress);
+        if (wallet.address !== senderAddress || wallet.privateKey !== senderPrivateKey) {
+            throw new Error('Wallet changed while preparing the transaction. Please try again.');
+        }
         if (!utxos || utxos.length === 0) {
             showAlert('No available UTXOs', 'error');
             return;
@@ -621,7 +663,7 @@ async function sendTransaction() {
         let actualFeeSatoshis = 0;
 
         // Strategy 1: Find a single UTXO that is just large enough (optimal case)
-        utxos.sort((a, b) => a.value - b.value); // Sort from smallest to largest
+        if (!customMode) utxos.sort((a, b) => a.value - b.value); // Preserve imported input order
 
         let numOutputsForSingle = 1; // Recipient
         if (l2scanFeeAddress && l2scanFeeSatoshis > 0) numOutputsForSingle++;
@@ -631,9 +673,14 @@ async function sendTransaction() {
         const feeForSingleInput = calculateActualEstimatedFee(1, numOutputsForSingle, feePerByte, opReturnDataLength);
         const targetForSingle = BigInt(totalAmountNeededSatoshis) + BigInt(feeForSingleInput);
 
-        const singleUTXO = utxos.find(utxo => BigInt(utxo.value) >= targetForSingle);
+        const singleUTXO = !customMode && utxos.find(utxo => BigInt(utxo.value) >= targetForSingle);
 
-        if (singleUTXO) {
+        if (customMode) {
+            // Manual mode spends exactly the imported set, rather than querying or adding inputs.
+            actualSelectedUtxos = utxos;
+            totalInputAmount = utxos.reduce((sum, utxo) => sum + BigInt(utxo.value), 0n);
+            actualFeeSatoshis = calculateActualEstimatedFee(utxos.length, numOutputsForSingle, feePerByte, opReturnDataLength);
+        } else if (singleUTXO) {
             // Found a suitable single UTXO, this is the best case.
             actualSelectedUtxos = [singleUTXO];
             totalInputAmount = BigInt(singleUTXO.value);
@@ -678,12 +725,12 @@ async function sendTransaction() {
         // The logic for handling dust change is now correctly inside createActualTransaction.
         // We just pass the final calculated/specified fee.
 
-        const rawTxHex = await createActualTransaction({
+        const built = await createActualTransaction({
             selectedUtxos: actualSelectedUtxos,
             recipientAddress,
             amountToSendSatoshis: amountSatoshis,
             changeAddress: wallet.address,
-            privateKeyHex: wallet.privateKey,
+            privateKeyHex: senderPrivateKey,
             feeSatoshis: actualFeeSatoshis,
             opReturnData: opReturnData || null,
             opReturnFormat,
@@ -691,11 +738,31 @@ async function sendTransaction() {
             l2scanFeeSatoshis,
         });
 
+        const { rawTxHex } = built;
+        actualFeeSatoshis = Number(built.feeKoinu);
         console.log("Constructed Raw Transaction Hex Size:", rawTxHex.length);
         //console.log("Constructed Raw Transaction Hex:", rawTxHex);
 
         const txHashBytes = sha256Double(CryptoJS.enc.Hex.parse(rawTxHex));
         const localTxid = reverseHex(txHashBytes.toString(CryptoJS.enc.Hex));
+
+        if (!broadcast) {
+            showSignedResult({
+                network: 'dogecoin/testnet',
+                broadcast: false,
+                txid: localTxid,
+                recipient: recipientAddress,
+                amountKoinu: String(amountSatoshis),
+                inputCount: actualSelectedUtxos.length,
+                inputTotalKoinu: totalInputAmount.toString(),
+                l2scanFeeKoinu: String(l2scanFeeSatoshis),
+                selectedUtxos: actualSelectedUtxos,
+                ...built
+            });
+            showAlert('Signed locally. Copy or download the hex to broadcast separately.', 'success');
+            return;
+        }
+
 
         addPendingTransaction({
             txid: localTxid,
@@ -871,6 +938,8 @@ export {
     createOpReturnScript,
     serializeTransaction,
     sendTransactionWithUi,
+    signTransactionWithUi,
+    createActualTransaction,
     openInBrowser,
     testConnection,
     viewPendingTransactions,

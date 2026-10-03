@@ -1,6 +1,12 @@
 import { wallet } from './wallet.js';
 
+let displayedWalletAddress = null;
+
 function updateWalletUI() {
+    if (displayedWalletAddress !== wallet.address) {
+        displayedWalletAddress = wallet.address;
+        document.dispatchEvent(new Event('wallet-changed'));
+    }
     if (wallet.address) {
         document.getElementById('address').textContent = wallet.address;
         document.getElementById('privateKey').textContent = wallet.wif || 'Generate or import wallet to view';

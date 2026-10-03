@@ -155,6 +155,31 @@
             <div class="right-column">
                 <div class="section">
                     <h2>Send Transaction</h2>
+                    <div class="form-group">
+                        <label for="utxoSource">UTXO source:</label>
+                        <select id="utxoSource">
+                            <option value="automatic">Automatic — query the network</option>
+                            <option value="custom">Custom — paste or import UTXOs</option>
+                        </select>
+                    </div>
+                    <div id="customUtxoPanel" class="custom-utxo-panel" hidden>
+                        <label for="customUtxos">Custom UTXOs (JSON):</label>
+                        <p class="help-text">All imported UTXOs will be used. No UTXO API request is made in this mode. Values named value or satoshis are in koinu (100,000,000 = 1 DOGE).</p>
+                        <textarea id="customUtxos" rows="7" spellcheck="false" aria-describedby="customUtxoSummary"
+                            placeholder='[{"txid":"64 hex characters","vout":0,"value":"1000100000000","scriptPubKey":"76a914...88ac"}]'></textarea>
+                        <label for="customUtxoFile">Or import a JSON file:</label>
+                        <input id="customUtxoFile" type="file" accept=".json,application/json">
+                        <p class="help-text">Accepts UTXO arrays, Crypto APIs prepare inputs, unspent-output responses, and the saved prepare-result JSON. Only inputs are imported; recipient, amount and fee are rebuilt from this form. An omitted script is derived from the selected wallet.</p>
+                        <button id="validateUtxosBtn" type="button">Validate &amp; Preview UTXOs</button>
+                        <p id="customUtxoSummary" role="status" aria-live="polite">Not validated. All imported UTXOs will be used.</p>
+                        <div class="utxo-table-scroll">
+                            <table class="transaction-table">
+                                <thead><tr><th>Transaction ID</th><th>vout</th><th>Amount (DOGE)</th></tr></thead>
+                                <tbody id="customUtxoRows"></tbody>
+                            </table>
+                        </div>
+                        <p class="help-text">Use current, unspent outputs belonging to this wallet. Import validation cannot confirm their on-chain state or amount.</p>
+                    </div>
                     <div class="form-group horizontal">
                         <label>Dogeos Bridge Address:</label>
                         <input type="text" id="toAddress" placeholder="Enter recipient address"
@@ -200,8 +225,18 @@
                             placeholder="Enter data content&#10;String mode: Hello Dogecoin!&#10;Hexadecimal mode: 48656c6c6f20446f6765636f696e21&#10;Maximum 80 bytes"></textarea>
                         <small id="opReturnHelp">OP_RETURN allows including arbitrary data in transactions, permanently recorded on blockchain</small>
                     </div>
-                    <div style="display: flex; gap: 5px; margin-bottom: 8px;">
-                        <button id="sendTransactionBtn">Send Transaction</button>
+                    <div class="transaction-actions">
+                        <button id="signTransactionBtn" type="button">Sign Only — Export Hex</button>
+                        <button id="sendTransactionBtn" type="button">Sign &amp; Broadcast</button>
+                    </div>
+                    <div id="signedTransactionPanel" class="signed-transaction-panel" hidden>
+                        <h3>Signed transaction</h3>
+                        <p id="signedTransactionSummary" class="signed-summary"></p>
+                        <label for="signedTransactionHex">Signed transaction hex:</label>
+                        <textarea id="signedTransactionHex" rows="5" readonly spellcheck="false"></textarea>
+                        <button id="copySignedTransactionBtn" type="button">Copy Hex</button>
+                        <button id="downloadSignedTransactionBtn" type="button">Download JSON</button>
+                        <p class="help-text">Submit the hex to a Dogecoin testnet broadcast service when ready. Signing does not reserve UTXOs or send funds.</p>
                     </div>
                 </div>
                 <!-- Transaction History moved here, under Send Transaction -->
